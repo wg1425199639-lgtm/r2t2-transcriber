@@ -150,7 +150,7 @@
 - 目标：热词 chip 增删、背景词多行输入、变更发 `hotwords.set`，显示"自第 N 段起生效"。
 - 验收：`cd app && npm run build && npx vitest run src/components/HotwordEditor.test.tsx`
 
-**M3-05 [Sol] 顶栏：音源选择 + 电平条 + 开始/停止**
+- [x] **M3-05 [Sol] 顶栏：音源选择 + 电平条 + 开始/停止**
 - 范围：`components/TopBar.tsx`、`components/LevelMeter.tsx`、`components/SourcePicker.tsx`
 - 目标：设备列表来自 `devices`；电平 60fps 平滑、静音超 3s 显示"未收到声音"。
 - 验收：`cd app && npm run build`
