@@ -80,7 +80,7 @@
 - 目标：strict TS；常量按 ARCHITECTURE §2.1；zod 定义 §3.2 全部消息。
 - 验收：`cd scheduler && npm i && npx tsc --noEmit`
 
-**M2-02 [Sol] 帧切分器 capture-reader + 单测**
+- [x] **M2-02 [Sol] 帧切分器 capture-reader + 单测**
 - 范围：`src/capture-reader.ts`、`src/capture-reader.test.ts`
 - 目标：把任意分片的字节流重组为定长帧（10240B/5120B）。
 - 验收：`cd scheduler && npx vitest run src/capture-reader.test.ts`
