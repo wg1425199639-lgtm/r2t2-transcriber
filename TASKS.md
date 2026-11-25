@@ -105,7 +105,7 @@
 - 目标：按 §3.3 接口；Mock 记录收到的字节并校验"END 前累计尾部 ≥9600B 全零"，吐假 delta。
 - 验收：`cd scheduler && npx tsc --noEmit && npx vitest run src/asr`
 
-**M2-07 [Sol] R2T2Adapter 真实实现（HTTP/1.1 Chunked + SSE）**
+- [x] **M2-07 [Sol] R2T2Adapter 真实实现（HTTP/1.1 Chunked + SSE）**
 - 范围：`src/asr/r2t2-adapter.ts`、`src/process-manager.ts`、`src/asr/r2t2-adapter.smoke.ts`
 - 目标：严格遵守 `docs/r2t2-reference.md` §3.3~§3.4：启动 `audiocpp_server --config <server.json> --no-ui` 并轮询 `GET /health`；`openSession` 必须用 `node:http`（禁 `fetch`/`undici`/`axios`）调 `POST /v1/audio/transcriptions/live`（显式 `Transfer-Encoding: chunked`，禁 `Content-Length` 与 `Expect: 100-continue`，立即 `req.flushHeaders()`，socket `setNoDelay(true)` + `setTimeout(0)`，`prompt` 去换行且编码前 `<= 250` 字符）；`StringDecoder('utf8')` 按 `\r?\n\r?\n` 切 SSE 帧；`done` 按前缀/LCP 补齐未提交尾字；`finish()` 发送终止块 `0\r\n\r\n`（`req.end()`）并保证单槽位互斥；崩溃退避重启。
 - 验收：`cd scheduler && npx tsx src/asr/r2t2-adapter.smoke.ts ../fixtures/news01.wav | tail -5`（打印中文转写）
