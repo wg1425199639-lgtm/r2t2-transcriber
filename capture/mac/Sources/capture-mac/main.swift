@@ -8,6 +8,13 @@ private enum Source: String {
 private enum FrameDuration: String {
     case ms160 = "160"
     case ms320 = "320"
+
+    var bytes: Int {
+        switch self {
+        case .ms160: return 5_120
+        case .ms320: return 10_240
+        }
+    }
 }
 
 private struct CaptureOptions {
@@ -68,8 +75,8 @@ private func parseCommand(_ arguments: ArraySlice<String>) throws -> Command {
     ))
 }
 
-private struct ErrorLog: Encodable {
-    let lvl = "error"
+private struct CaptureLog: Encodable {
+    let lvl: String
     let code: String
     let msg: String
 }
@@ -81,7 +88,7 @@ private func writeJSONLine<T: Encodable>(_ value: T, to stream: FileHandle) thro
 }
 
 private func fail(_ code: String, _ message: String, status: Int32) -> Never {
-    try? writeJSONLine(ErrorLog(code: code, msg: message), to: .standardError)
+    try? writeJSONLine(CaptureLog(lvl: "error", code: code, msg: message), to: .standardError)
     exit(status)
 }
 
@@ -90,10 +97,30 @@ do {
     case .listDevices:
         try writeJSONLine(DeviceList(devices: listAudioDevices()), to: .standardOutput)
     case .capture(let options):
-        fail("NOT_IMPLEMENTED", "Capture for source \(options.source.rawValue) is not implemented", status: 5)
+        switch options.source {
+        case .system:
+            fail("NOT_IMPLEMENTED", "Capture for source system is not implemented", status: 5)
+        case .mic:
+            let capture = MicCapture(frameBytes: options.frameDuration.bytes)
+            try capture.start(deviceUID: options.deviceID, dumpPath: options.dumpWAVPath) { error in
+                if let error {
+                    fail("INTERNAL_ERROR", error.localizedDescription, status: 5)
+                }
+                exit(0)
+            }
+            try? writeJSONLine(
+                CaptureLog(lvl: "info", code: "READY", msg: "mic capture started"),
+                to: .standardError
+            )
+            dispatchMain()
+        }
     }
 } catch let error as InvalidArguments {
     fail("INVALID_ARGS", error.message, status: 2)
+} catch MicCapture.StartError.permissionDenied {
+    fail("PERM_DENIED", "Microphone access was denied or restricted", status: 3)
+} catch MicCapture.StartError.deviceUnavailable(let message) {
+    fail("DEVICE_UNAVAILABLE", message, status: 4)
 } catch {
     fail("INTERNAL_ERROR", error.localizedDescription, status: 5)
 }
