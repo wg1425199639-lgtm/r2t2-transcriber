@@ -174,7 +174,8 @@ export interface AsrAdapter {
 - 会话初始化（热词字段）：Query 参数 `language=Chinese` 与 `prompt=<URL 编码热词/背景词>`
 - END 控制帧格式：写入 ≥9600B 全零静音后发送 HTTP/1.1 终止块 `0\r\n\r\n`（`req.end()`）
 - 结果 SSE schema：delta = `{"type":"transcript.text.delta","delta":"..."}`；final = `{"type":"transcript.text.done","text":"...","timing":{"ttft_ms":...}}`；结束 = `data: [DONE]`
-- 并发能力：单模型槽位互斥（同一时刻 1 个活跃流），VAD 切段按顺序 finish 旧流再开新流（期间新帧入 `pending` 队列）
+- 并发能力：单模型槽位互斥（同一时刻 1 个活跃流），VAD 切段按顺序 finish 旧流再开新流（期间新帧入 `pending` 队列，新流就绪后突发冲刷追帧）
+- M2 接入强约束（详见 `docs/r2t2-reference.md` §3.4）：必须使用 `node:http`（禁 `fetch`/`undici`/`axios`）、`req.flushHeaders()`、`setNoDelay(true)`、`setTimeout(0)`、`StringDecoder('utf8')` 按 `\r?\n\r?\n` 切帧、静音不保活 + `320~640ms` Pre-roll、`prompt` 去换行且编码前 `<= 250` 字符、`done` 尾字前缀/LCP 补齐
 
 ## 4. 稳定性设计（1~3 小时）
 

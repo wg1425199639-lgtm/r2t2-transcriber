@@ -65,7 +65,7 @@
 - 目标：`--source system` 仅音频流（排除自身），经重采样输出。
 - 验收：同 M1-04，将 `--source mic` 换为 `--source system` 并输出 `/tmp/sys.wav`（须先播放音频）
 
-**M1-06 [人工] 听音验收**：播放新闻视频 + 对麦克风说话，各录 10s，听 `/tmp/sys.wav`、`/tmp/mic.wav` 无爆音/变速/变调。验收：`afplay /tmp/sys.wav`；并执行 `capture/mac/.build/release/capture-mac --source system 2>/dev/null | head -c 320000 | wc -c` 得 `320000`（=10s）
+- [x] **M1-06 [人工] 听音验收**：播放新闻视频 + 对麦克风说话，各录 10s，听 `/tmp/sys.wav`、`/tmp/mic.wav` 无爆音/变速/变调。验收：`afplay /tmp/sys.wav`；并执行 `capture/mac/.build/release/capture-mac --source system 2>/dev/null | head -c 320000 | wc -c` 得 `320000`（=10s）
 
 - [x] **M1-07 [Sol] stdout 纯净性测试脚本**
 - 范围：`scripts/e2e-capture-pure.sh`
@@ -107,7 +107,7 @@
 
 **M2-07 [Sol] R2T2Adapter 真实实现（HTTP/1.1 Chunked + SSE）**
 - 范围：`src/asr/r2t2-adapter.ts`、`src/process-manager.ts`、`src/asr/r2t2-adapter.smoke.ts`
-- 目标：按 `docs/r2t2-reference.md` §3 启动 `audiocpp_server --config <server.json> --no-ui` 并轮询 `GET /health`；`openSession` 调用 `POST /v1/audio/transcriptions/live`（单一 `Transfer-Encoding: chunked`，禁 `Expect: 100-continue`，Query 传 `language=Chinese` 与 URL 编码 `prompt`），解析 SSE `transcript.text.delta`/`done`/`[DONE]`；`finish()` 正常发送终止块 `0\r\n\r\n`（`req.end()`）并保证单模型槽位互斥顺序切段；崩溃退避重启。
+- 目标：严格遵守 `docs/r2t2-reference.md` §3.3~§3.4：启动 `audiocpp_server --config <server.json> --no-ui` 并轮询 `GET /health`；`openSession` 必须用 `node:http`（禁 `fetch`/`undici`/`axios`）调 `POST /v1/audio/transcriptions/live`（显式 `Transfer-Encoding: chunked`，禁 `Content-Length` 与 `Expect: 100-continue`，立即 `req.flushHeaders()`，socket `setNoDelay(true)` + `setTimeout(0)`，`prompt` 去换行且编码前 `<= 250` 字符）；`StringDecoder('utf8')` 按 `\r?\n\r?\n` 切 SSE 帧；`done` 按前缀/LCP 补齐未提交尾字；`finish()` 发送终止块 `0\r\n\r\n`（`req.end()`）并保证单槽位互斥；崩溃退避重启。
 - 验收：`cd scheduler && npx tsx src/asr/r2t2-adapter.smoke.ts ../fixtures/news01.wav | tail -5`（打印中文转写）
 
 **M2-08 [Sol] 热词持久化 + transcript-log**

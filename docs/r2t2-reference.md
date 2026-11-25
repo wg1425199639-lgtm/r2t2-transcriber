@@ -117,7 +117,15 @@
 * **并发约束：** 每个模型槽位由 `busy_timeout_ms` 互斥锁保护，单槽位同一时刻仅支持一个活跃流式请求；VAD 分段切换时需按"旧流补静音 → `req.end()` 等 `done` → 开新请求"顺序执行。
 * **业务隔离要求：** 所有 `audiocpp_server` 协议细节严格收敛于 `scheduler/src/asr/r2t2-adapter.ts`。
 
-### 3.4 M0 实机验效记录（Apple M5 Pro / Metal / Q8_0）
+### 3.4 M2 调度层接入强约束（必须严格遵守）
+
+1. **HTTP/1.1 全双工客户端锁定：** `scheduler/src/asr/r2t2-adapter.ts` 必须使用 Node.js 原生 `node:http`（`http.request`）实现 HTTP/1.1 全双工 Chunked + SSE，**严禁**使用 `fetch` / `undici` / `axios`；显式设置 `Transfer-Encoding: chunked`，禁发 `Content-Length` 与 `Expect: 100-continue`，建连后立即 `req.flushHeaders()`，socket 开启 `setNoDelay(true)` 与 `setTimeout(0)`。
+2. **SSE UTF-8 安全切帧：** SSE 解析必须使用 `StringDecoder('utf8')` 按 `\r?\n\r?\n` 缓冲切帧，防止中文多字节字符或 JSON 跨 TCP 包截断。
+3. **静音不保活 + Pre-roll 环形缓冲：** 静音待机时不保持空闲 HTTP 连接（规避服务端 `idle_timeout_ms: 30000` 超时断连），本地维护 `320ms~640ms` Pre-roll 环形缓冲，VAD 检测到人声后再建连并先发 Pre-roll。
+4. **分段切换 Pending 队列不丢帧：** 分段切换期间（旧流补 `300ms` 全零静音帧 → `req.end()` → 等 `transcript.text.done`），新到达的 PCM 帧必须写入内存 Pending 队列，待新流就绪后突发冲刷追帧，严禁丢弃切换期音频。
+5. **Prompt 长度护栏与尾字 LCP 补齐：** Query 参数 `prompt` 必须去除换行并限制编码前长度 `<= 250` 字符（防 HTTP 414 超长）；收到 `transcript.text.done` 时优先前缀匹配补齐未提交的尾部 `unfixed_token_num`，未严格匹配时按最长公共前缀（LCP）补齐并打 `warn` 日志。
+
+### 3.5 M0 实机验效记录（Apple M5 Pro / Metal / Q8_0）
 
 * **测试样本：** `fixtures/news01.wav`（23.49s，16kHz/Mono/s16le），热词 `十五五规划,新质生产力,粤港澳大湾区,雄安新区,成渝地区双城经济圈,国务院新闻办公室`。
 * **Burst 推流（无热词）：** 总耗时 `11.35s`（RTF `0.48`），首字 `1555ms`，正文零错字。
