@@ -140,7 +140,7 @@
 - 目标：自动重连(指数退避)、消息 zod 校验（复用 protocol 类型）、append-only 合并 delta。
 - 验收：`cd app && npx vitest run`
 
-**M3-03 [Sol] 转写区组件（Append-only + 智能滚动）**
+- [x] **M3-03 [Sol] 转写区组件（Append-only + 智能滚动）**
 - 范围：`app/src/components/Transcript.tsx`、`hooks/useStickyScroll.ts`、`components/JumpToLatest.tsx`
 - 目标：按 DESIGN §4；用户上滚立即解锁，显示"回到最新"胶囊；新文本不产生布局跳动。
 - 验收：`cd app && npx vitest run src/hooks/useStickyScroll.test.ts && npm run build`
