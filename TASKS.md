@@ -85,7 +85,7 @@
 - 目标：把任意分片的字节流重组为定长帧（10240B/5120B）。
 - 验收：`cd scheduler && npx vitest run src/capture-reader.test.ts`
 
-**M2-03 [Sol] 电平计 level-meter + 单测**
+- [x] **M2-03 [Sol] 电平计 level-meter + 单测**
 - 范围：`src/level-meter.ts`、`src/level-meter.test.ts`
 - 目标：帧 → rmsDb/peakDb；静音 `-120`，满幅 `0`。
 - 验收：`cd scheduler && npx vitest run src/level-meter.test.ts`
