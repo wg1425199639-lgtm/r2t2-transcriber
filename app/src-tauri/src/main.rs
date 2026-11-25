@@ -15,7 +15,7 @@ use tauri::{Manager, RunEvent};
 struct Scheduler(Mutex<Option<Child>>);
 
 impl Scheduler {
-    fn start(&self) -> io::Result<()> {
+    fn start(&self, resource_dir: Option<&Path>) -> io::Result<()> {
         let address = ([127, 0, 0, 1], 47800).into();
         if TcpStream::connect_timeout(&address, Duration::from_millis(150)).is_ok() {
             return Ok(());
@@ -31,20 +31,36 @@ impl Scheduler {
             };
             Command::new(program)
         } else {
-            let node = find_node()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Node was not found"))?;
-            let mut command = Command::new(node);
-            command.args(["--import", "tsx", "src/main.ts", "--engine", "r2t2"]);
-            if directory.is_none() {
+            let Some(directory) = &directory else {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
                     "scheduler directory was not found; set SCHEDULER_BIN",
                 ));
+            };
+            let node = find_node()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Node was not found"))?;
+            let mut command = Command::new(node);
+            if directory.join("dist/main.js").is_file() {
+                command.arg("dist/main.js");
+            } else {
+                command.args(["--import", "tsx", "src/main.ts"]);
             }
+            command.args(["--engine", "r2t2"]);
             command
         };
         if let Some(directory) = directory {
             command.current_dir(directory);
+        }
+        if let Some(resource_dir) = resource_dir {
+            for (variable, filename) in [
+                ("CAPTURE_PATH", "capture-mac"),
+                ("ASR_SERVER_PATH", "audiocpp_server"),
+            ] {
+                let path = resource_dir.join("bin").join(filename);
+                if env::var_os(variable).is_none() && path.is_file() {
+                    command.env(variable, path);
+                }
+            }
         }
 
         let child = command
@@ -80,7 +96,10 @@ fn scheduler_directory() -> Option<PathBuf> {
         .find_map(|path| {
             path.ancestors()
                 .map(|ancestor| ancestor.join("scheduler"))
-                .find(|directory| directory.join("src/main.ts").is_file())
+                .find(|directory| {
+                    directory.join("dist/main.js").is_file()
+                        || directory.join("src/main.ts").is_file()
+                })
         })
 }
 
@@ -199,7 +218,8 @@ fn main() {
         .manage(Scheduler::default())
         .invoke_handler(tauri::generate_handler![reveal_in_finder, write_export_file])
         .setup(|app| {
-            app.state::<Scheduler>().start()?;
+            let resource_dir = app.path().resource_dir().ok();
+            app.state::<Scheduler>().start(resource_dir.as_deref())?;
             Ok(())
         })
         .build(tauri::generate_context!())

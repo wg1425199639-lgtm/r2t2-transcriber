@@ -190,7 +190,7 @@
 - 目标：采集退出后重启；应用重开时可恢复上一个未导出的会话。
 - 验收：`bash scripts/e2e-recover.sh`（Sol 代写：kill -9 采集与引擎各一次，断言会话持续且 jsonl 完整）
 
-**M4-05 [Sol] 一键启动与打包脚本**
+- [x] **M4-05 [Sol] 一键启动与打包脚本**
 - 范围：`scripts/package-mac.sh`、`app/src-tauri/tauri.conf.json`
 - 目标：构建 capture-mac、scheduler(单文件化)、audiocpp_server 并作为 sidecar/resources 打入 `.app`；权重不入包，首次启动指向 `models/` 或用户目录。
 - 验收：`bash scripts/package-mac.sh && test -d app/src-tauri/target/release/bundle/macos/*.app`
