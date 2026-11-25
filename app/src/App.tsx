@@ -78,7 +78,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[var(--bg)] text-[var(--text)]">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <div className={sidebarCollapsed ? "hidden" : "flex shrink-0"}>
         <Sidebar
           onExportMarkdown={hasTranscript ? exportMarkdown : undefined}

@@ -34,7 +34,7 @@ export interface HotwordEditorProps {
   onSave: (hotwords: string[], background: string) => void;
 }
 
-const fieldClass = "w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm placeholder:text-[var(--text-3)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]";
+const fieldClass = "w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 placeholder:text-[var(--text-3)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]";
 
 export function HotwordEditor({
   hotwords = EMPTY_HOTWORDS,
@@ -91,7 +91,7 @@ export function HotwordEditor({
         <span className="text-xs text-[var(--text-2)]">{query ? `${visibleWords.length} / ` : ""}{words.length} 条</span>
       </div>
       <input
-        className={fieldClass}
+        className={`${fieldClass} py-1.5 text-sm`}
         aria-label="添加热词"
         placeholder="输入热词，按回车添加"
         value={entry}
@@ -110,7 +110,7 @@ export function HotwordEditor({
         }}
       />
       <input
-        className={fieldClass}
+        className={`${fieldClass} py-1.5 text-sm`}
         type="search"
         aria-label="搜索热词"
         placeholder="搜索热词"
@@ -118,10 +118,10 @@ export function HotwordEditor({
         onChange={(event) => setSearch(event.target.value)}
       />
       {visibleWords.length > 0 && (
-        <ul aria-label="热词列表" className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+        <ul aria-label="热词列表" className="flex flex-wrap content-start gap-1.5 max-h-[148px] overflow-y-auto overscroll-contain pr-1 [mask-image:linear-gradient(to_bottom,#000_calc(100%-16px),transparent)] pb-4">
           {visibleWords.map((word) => (
-            <li key={word} className="inline-flex max-w-full items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--bg-elevated)] py-0.5 pr-0.5 pl-1.5">
-              <span className="min-w-0 wrap-anywhere">{word}</span>
+            <li key={word} className="inline-flex h-7 max-w-full items-center gap-1 px-2 rounded-[6px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[13px] whitespace-nowrap">
+              <span className="min-w-0 truncate" title={word}>{word}</span>
               <button
                 type="button"
                 aria-label={`删除热词 ${word}`}
@@ -137,7 +137,7 @@ export function HotwordEditor({
       <label htmlFor={backgroundId} className="mt-2 font-medium">背景词</label>
       <textarea
         id={backgroundId}
-        className={`${fieldClass} resize-y`}
+        className={`${fieldClass} resize-none overflow-x-hidden overflow-y-auto leading-[1.6] text-[13px] py-2`}
         rows={4}
         placeholder="十五五规划、国务院新闻办……"
         value={draft}
@@ -152,7 +152,7 @@ export function HotwordEditor({
         }}
       />
       <div className="grid gap-1 text-xs text-[var(--text-2)]">
-        <span className={`numeric ${budget.totalChars > PROMPT_LIMIT ? "text-[var(--warn)]" : ""}`}>
+        <span className={`mt-1 text-right text-[11px] font-mono tabular-nums ${budget.totalChars > PROMPT_LIMIT ? "text-[var(--warn)]" : "text-[var(--text-3)]"}`}>
           {budget.totalChars} / {PROMPT_LIMIT}
         </span>
         {budget.backgroundTruncated && <span className="text-[var(--warn)]">背景词将被截断</span>}
