@@ -169,7 +169,7 @@ export interface AsrAdapter {
 }
 ```
 **M0 实测回填区**（来自 `docs/r2t2-reference.md` §3 实测版）：
-- 启动命令/参数：`audiocpp_server --config <server.json> --no-ui`（`backend: "metal"`, `family: "confucius4_r2t2"`, `mode: "streaming"`, `session_options: {"confucius4_r2t2.chunk_size_ms": 320}`）
+- 启动命令/参数：`audiocpp_server --config <server.json> --no-ui`（`backend: "metal"`, `family: "confucius4_r2t2"`, `mode: "streaming"`, `session_options: {"confucius4_r2t2.chunk_size_ms": 160, "confucius4_r2t2.unfixed_chunk_num": 2, "confucius4_r2t2.unfixed_token_num": 2}`）
 - 传输协议与路由：HTTP/1.1 全双工流式 `POST /v1/audio/transcriptions/live?model=r2t2-stream&sample_rate=16000&channels=1&sample_format=s16le&language=Chinese&prompt=<url-encoded>`（非 WebSocket；请求体 `Transfer-Encoding: chunked` 裸 PCM，响应体 SSE）
 - 会话初始化（热词字段）：Query 参数 `language=Chinese` 与 `prompt=<URL 编码热词/背景词>`
 - END 控制帧格式：写入 ≥9600B 全零静音后发送 HTTP/1.1 终止块 `0\r\n\r\n`（`req.end()`）

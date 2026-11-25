@@ -82,7 +82,9 @@
         "task": "asr",
         "mode": "streaming",
         "session_options": {
-          "confucius4_r2t2.chunk_size_ms": 320
+          "confucius4_r2t2.chunk_size_ms": 160,
+          "confucius4_r2t2.unfixed_chunk_num": 2,
+          "confucius4_r2t2.unfixed_token_num": 2
         }
       }
     ]

@@ -43,6 +43,10 @@ export const VAD_SILENCE_THRESHOLD = 0.35;
 export const VAD_SPEECH_ONSET_WINDOWS = 2;
 export const MAX_PROMPT_CHARS = 250;
 
+export const ASR_CHUNK_MS = SHORT_FRAME_MS;
+export const ASR_UNFIXED_CHUNK_NUM = 2;
+export const ASR_UNFIXED_TOKEN_NUM = 2;
+
 export const WS_HOST = "127.0.0.1";
 export const WS_PORT = 47800;
 export const WS_PATH = "/ws";

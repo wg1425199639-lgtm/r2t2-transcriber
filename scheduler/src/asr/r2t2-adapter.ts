@@ -6,8 +6,9 @@ import { performance } from "node:perf_hooks";
 import { StringDecoder } from "node:string_decoder";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  ASR_HOST, ASR_MODEL_PATH, ASR_PORT, ASR_SERVER_PATH, BYTES_PER_SAMPLE,
-  CHANNELS, FRAME_BYTES, FRAME_MS, MAX_PROMPT_CHARS, SAMPLE_FORMAT, SAMPLE_RATE,
+  ASR_CHUNK_MS, ASR_HOST, ASR_MODEL_PATH, ASR_PORT, ASR_SERVER_PATH,
+  ASR_UNFIXED_CHUNK_NUM, ASR_UNFIXED_TOKEN_NUM, BYTES_PER_SAMPLE,
+  CHANNELS, FRAME_BYTES, MAX_PROMPT_CHARS, SAMPLE_FORMAT, SAMPLE_RATE,
   TAIL_SILENCE_BYTES,
 } from "../config.js";
 import { ManagedProcess } from "../process-manager.js";
@@ -357,7 +358,11 @@ export class R2T2Adapter implements AsrAdapter {
         path: ASR_MODEL_PATH,
         task: "asr",
         mode: "streaming",
-        session_options: { "confucius4_r2t2.chunk_size_ms": FRAME_MS },
+        session_options: {
+          "confucius4_r2t2.chunk_size_ms": ASR_CHUNK_MS,
+          "confucius4_r2t2.unfixed_chunk_num": ASR_UNFIXED_CHUNK_NUM,
+          "confucius4_r2t2.unfixed_token_num": ASR_UNFIXED_TOKEN_NUM,
+        },
       }],
     }));
     const server = new ManagedProcess(ASR_SERVER_PATH, ["--config", configPath, "--no-ui"], {

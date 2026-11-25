@@ -165,7 +165,7 @@
 - 目标：应用启动时拉起 scheduler 并随退出终止；仅放行必要权限。
 - 验收：`cd app && npm run tauri build -- --debug 2>&1 | tail -5`
 
-**M3-08 [人工] 视觉与联调验收**：`npm run tauri dev`，播放新闻，核对 DESIGN 全部条目；会议中途改热词，下一分段起生效。验收：`bash scripts/e2e-hotword-live.sh`（Sol 可代写：脚本通过 WS 中途 `hotwords.set` 并断言 `segment` 轮转后 `hotwords.appliesFromSegment` 生效）；交由架构师截图验收。
+- [x] **M3-08 [人工] 视觉与联调验收**：`npm run tauri dev`，播放新闻，核对 DESIGN 全部条目；会议中途改热词，下一分段起生效。验收：`bash scripts/e2e-hotword-live.sh`（Sol 可代写：脚本通过 WS 中途 `hotwords.set` 并断言 `segment` 轮转后 `hotwords.appliesFromSegment` 生效）；交由架构师截图验收。
 
 ---
 ## Milestone 4 — 导出、恢复、打包
