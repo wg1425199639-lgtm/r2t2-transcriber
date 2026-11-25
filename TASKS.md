@@ -160,7 +160,7 @@
 - 目标：按 DESIGN 排版；命中热词克制高亮；段首时间戳。
 - 验收：`cd app && npx vitest run src/lib/highlight.test.ts && npm run build`
 
-**M3-07 [Sol] Tauri sidecar 拉起 scheduler**
+- [x] **M3-07 [Sol] Tauri sidecar 拉起 scheduler**
 - 范围：`app/src-tauri/src/main.rs`、`tauri.conf.json`、`capabilities/default.json`
 - 目标：应用启动时拉起 scheduler 并随退出终止；仅放行必要权限。
 - 验收：`cd app && npm run tauri build -- --debug 2>&1 | tail -5`
