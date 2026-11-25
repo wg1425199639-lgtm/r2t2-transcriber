@@ -100,7 +100,7 @@
 - 目标：输入 {帧, 各窗 prob}，输出动作流 `OPEN/PUSH/TAIL_SILENCE/FINISH/ROTATE`；覆盖 60/75/90/100s、1500ms 空闲收尾、预卷、stop 时必先 TAIL_SILENCE(9600B)。用合成 prob 序列模拟 3 小时无越界。
 - 验收：`cd scheduler && npx vitest run src/vad/segmenter.test.ts`
 
-**M2-06 [Sol] Adapter 接口 + MockAdapter**
+- [x] **M2-06 [Sol] Adapter 接口 + MockAdapter**
 - 范围：`src/asr/adapter.ts`、`src/asr/mock-adapter.ts`
 - 目标：按 §3.3 接口；Mock 记录收到的字节并校验"END 前累计尾部 ≥9600B 全零"，吐假 delta。
 - 验收：`cd scheduler && npx tsc --noEmit && npx vitest run src/asr`
