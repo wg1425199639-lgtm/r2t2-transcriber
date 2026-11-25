@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --font-sans: "PingFang SC", -apple-system, "SF Pro Text", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace;
+  --color-surface: var(--bg);
+  --color-elevated: var(--bg-elevated);
+  --color-divider: var(--border);
+  --color-primary: var(--accent);
+  --color-foreground: var(--text);
+  --color-muted-foreground: var(--text-2);
+}
+
+@layer base {
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    line-break: strict;
+    word-break: normal;
+    hanging-punctuation: allow-end;
+  }
+
+  ::selection {
+    background-color: var(--selection);
+  }
+}
+
+@utility numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility append-fade-in {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: append-fade-in 120ms ease-out both;
+  }
+}
+
+@utility transcript-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  vertical-align: text-bottom;
+  background-color: var(--text-2);
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: transcript-caret 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes append-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes transcript-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}

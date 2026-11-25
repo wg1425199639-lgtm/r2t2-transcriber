@@ -130,7 +130,7 @@
 ---
 ## Milestone 3 — Tauri + React 前端
 
-**M3-01 [Sol] 前端脚手架 + 主题 token**
+- [x] **M3-01 [Sol] 前端脚手架 + 主题 token**
 - 范围：`app/` 初始化（Tauri 2 + Vite React TS + Tailwind + shadcn 初始化）、`app/src/styles/tokens.css`
 - 目标：按 `DESIGN.md` §2 写入浅/暗 CSS 变量；跟随系统。
 - 验收：`cd app && npm i && npm run build`
