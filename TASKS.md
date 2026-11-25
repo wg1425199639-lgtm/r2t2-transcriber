@@ -95,7 +95,7 @@
 - 目标：onnxruntime-node 加载 `models/silero_vad.onnx`，按 512 样本窗输出 prob，维护 state；测试用 fixtures wav 与全零数据。
 - 验收：`cd scheduler && npx vitest run src/vad/silero.test.ts`
 
-**M2-05 [Sol] 分段状态机 segmenter（纯逻辑 + 单测）**
+- [x] **M2-05 [Sol] 分段状态机 segmenter（纯逻辑 + 单测）**
 - 范围：`src/vad/segmenter.ts`、`src/vad/segmenter.test.ts`
 - 目标：输入 {帧, 各窗 prob}，输出动作流 `OPEN/PUSH/TAIL_SILENCE/FINISH/ROTATE`；覆盖 60/75/90/100s、1500ms 空闲收尾、预卷、stop 时必先 TAIL_SILENCE(9600B)。用合成 prob 序列模拟 3 小时无越界。
 - 验收：`cd scheduler && npx vitest run src/vad/segmenter.test.ts`
