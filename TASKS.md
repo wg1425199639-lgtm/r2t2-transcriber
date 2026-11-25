@@ -200,7 +200,7 @@
 ---
 ## Milestone 5 — v0.2 穿透悬浮字幕 · OBS 同源 · 原声点读 · 金句打点
 
-**M5-01 [Sol] 悬浮字幕视图 `CaptionOverlay` + 单测**
+- [x] **M5-01 [Sol] 悬浮字幕视图 `CaptionOverlay` + 单测**
 - 范围：`app/src/components/CaptionOverlay.tsx`、`app/src/components/CaptionOverlay.test.tsx`、`app/src/main.tsx`
 - 目标：`?view=overlay` 渲染广播级双行悬浮字幕胶囊（`DESIGN.md` §6.1：深色毛玻璃、双行限流、热词微亮、5s 无新字自动呼吸弱化至 `0.18` 透明度、支持 `?view=overlay&obs=1` 纯透明无外框模式）；`main.tsx` 按 URL query 路由至 `CaptionOverlay` 或 `App`。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run src/components/CaptionOverlay.test.tsx && npm run build`
