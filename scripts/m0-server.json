@@ -1,0 +1,28 @@
+{
+  "host": "127.0.0.1",
+  "port": 19488,
+  "backend": "metal",
+  "device": 0,
+  "threads": 4,
+  "lazy_load": false,
+  "max_loaded_models": 1,
+  "live_ingest": {
+    "idle_timeout_ms": 30000,
+    "total_timeout_ms": 180000,
+    "max_body_bytes": 536870912,
+    "max_chunk_bytes": 8388608,
+    "send_timeout_ms": 30000
+  },
+  "models": [
+    {
+      "id": "r2t2-stream",
+      "family": "confucius4_r2t2",
+      "path": "/Users/chu/WorkBuddy/2026-11-25-08-56-29/models/Confucius4-R2T2-GGUF/r2t2-q8_0.gguf",
+      "task": "asr",
+      "mode": "streaming",
+      "session_options": {
+        "confucius4_r2t2.chunk_size_ms": 320
+      }
+    }
+  ]
+}
