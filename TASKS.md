@@ -115,7 +115,7 @@
 - 目标：JSON 原子写；改动后下一次 `get()` 立即为新值；jsonl 追加。
 - 验收：`cd scheduler && npx vitest run src/hotwords-store.test.ts`
 
-**M2-09 [Sol] 编排 main + ws-server**
+- [x] **M2-09 [Sol] 编排 main + ws-server**
 - 范围：`src/main.ts`、`src/ws-server.ts`
 - 目标：串联 capture → reader → meter/VAD/segmenter → adapter → WS；实现 §3.2 全部消息；支持 `--source file:<wav>` 开发模式喂文件。
 - 验收：`cd scheduler && npx tsx src/main.ts --source file:../fixtures/news01.wav --engine mock --exit-on-eof & sleep 1; npx tsx ../scripts/ws-client-dump.ts | grep -c transcript.delta`（>0）
