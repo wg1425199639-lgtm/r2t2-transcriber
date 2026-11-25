@@ -120,7 +120,7 @@
 - 目标：串联 capture → reader → meter/VAD/segmenter → adapter → WS；实现 §3.2 全部消息；支持 `--source file:<wav>` 开发模式喂文件。
 - 验收：`cd scheduler && npx tsx src/main.ts --source file:../fixtures/news01.wav --engine mock --exit-on-eof & sleep 1; npx tsx ../scripts/ws-client-dump.ts | grep -c transcript.delta`（>0）
 
-**M2-10 [Sol] 5 分钟连续播报 E2E**
+- [x] **M2-10 [Sol] 5 分钟连续播报 E2E**
 - 范围：`scripts/e2e-5min.sh`、`scripts/ws-client-dump.ts`
 - 目标：拼接 fixtures 为 ≥300s wav，用真实引擎、实时速率喂入；断言：WS 不断连、出现 ≥3 次 `segment.end`、无 `error`、每段 durMs ≤100000、每个 `segment.end` 前引擎收到尾静音、最终文本 CER 低于阈值。
 - 验收：`bash scripts/e2e-5min.sh`
