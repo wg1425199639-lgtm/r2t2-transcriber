@@ -135,7 +135,7 @@
 - 目标：按 `DESIGN.md` §2 写入浅/暗 CSS 变量；跟随系统。
 - 验收：`cd app && npm i && npm run build`
 
-**M3-02 [Sol] WS 客户端 + 状态 store**
+- [x] **M3-02 [Sol] WS 客户端 + 状态 store**
 - 范围：`app/src/lib/ws-client.ts`、`app/src/store/session.ts`、`ws-client.test.ts`
 - 目标：自动重连(指数退避)、消息 zod 校验（复用 protocol 类型）、append-only 合并 delta。
 - 验收：`cd app && npx vitest run`
