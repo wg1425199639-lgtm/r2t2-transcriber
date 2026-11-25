@@ -185,7 +185,7 @@
 - 目标：kill 引擎后自动重启并续接新分段，前端收 `warn` 且不丢已转写文本。
 - 验收：`cd scheduler && npx vitest run src/process-manager.test.ts`
 
-**M4-04 [Sol] 异常恢复：采集崩溃/设备热插拔 + 应用崩溃恢复**
+- [x] **M4-04 [Sol] 异常恢复：采集崩溃/设备热插拔 + 应用崩溃恢复**
 - 范围：`scheduler/src/main.ts`、`scheduler/src/transcript-log.ts`、`app/src/store/session.ts`
 - 目标：采集退出后重启；应用重开时可恢复上一个未导出的会话。
 - 验收：`bash scripts/e2e-recover.sh`（Sol 代写：kill -9 采集与引擎各一次，断言会话持续且 jsonl 完整）

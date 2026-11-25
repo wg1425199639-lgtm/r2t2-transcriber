@@ -1,6 +1,8 @@
-import { execFile } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { open, type FileHandle } from "node:fs/promises";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import type { WebSocket } from "ws";
@@ -9,7 +11,7 @@ import { MockAsrAdapter } from "./asr/mock-adapter.js";
 import { R2T2Adapter } from "./asr/r2t2-adapter.js";
 import { CaptureReader } from "./capture-reader.js";
 import {
-  ASR_MODEL_PATH, BYTES_PER_SAMPLE, CAPTURE_PATH, CHANNELS, FRAME_BYTES, FRAME_MS,
+  ASR_MODEL_PATH, BYTES_PER_SAMPLE, CAPTURE_PATH, CHANNELS, DATA_DIR, FRAME_BYTES, FRAME_MS,
   SAMPLE_RATE, SHORT_FRAME_BYTES, SHORT_FRAME_MS, WS_PORT,
 } from "./config.js";
 import { exportSession } from "./export.js";
@@ -17,7 +19,7 @@ import { HotwordsStore } from "./hotwords-store.js";
 import { measureLevel } from "./level-meter.js";
 import { ManagedProcess } from "./process-manager.js";
 import { PROTOCOL_VERSION, serverMessageSchema, type ClientMessage, type ServerMessage } from "./protocol.js";
-import { TranscriptLog, type TranscriptLogRecord } from "./transcript-log.js";
+import { loadLatestSessionRecords, TranscriptLog, type TranscriptLogRecord } from "./transcript-log.js";
 import { Segmenter, type SegmenterAction, type VadState } from "./vad/segmenter.js";
 import { SileroVad } from "./vad/silero.js";
 import { SchedulerWsServer } from "./ws-server.js";
@@ -155,8 +157,8 @@ interface ActiveSegment {
   session: AsrSession;
   openedAt: number;
   nextSeq: number;
-  finishing: boolean;
-  transportError?: Error;
+  audioBytes: number;
+  failed: boolean;
 }
 
 class Recording {
@@ -298,29 +300,47 @@ class Recording {
     const { signal } = this.controller;
     const args = ["--source", source.source, "--frame-ms", String(this.frameMs)];
     if (source.deviceId !== undefined) args.push("--device-id", source.deviceId);
-    const capture = new ManagedProcess(CAPTURE_PATH, args, { stdio: ["ignore", "pipe", "inherit"] });
+    let child: ChildProcess | undefined;
+    const capture = new ManagedProcess(CAPTURE_PATH, args, { stdio: ["ignore", "pipe", "pipe"] }, {
+      onWarn: (msg) => {
+        if (!signal.aborted && child?.exitCode !== 2 && child?.exitCode !== 3) {
+          this.warn("CAPTURE_RESTARTING", msg);
+        }
+      },
+      onFatal: (msg) => this.fail(new Error(msg)),
+    });
     this.capture = capture;
     capture.start();
-    let child = capture.current;
-    const reader = new CaptureReader(this.frameBytes);
-    while (!signal.aborted && child?.stdout) {
+    child = capture.current;
+    while (!signal.aborted && child?.stdout && child.stderr) {
+      const current = child;
+      const { stdout, stderr } = child;
       const exit = new Promise<{ code: number | null; error?: Error }>((resolve) => {
-        child?.once("error", (error) => resolve({ code: null, error }));
-        child?.once("close", (code) => resolve({ code }));
+        const onError = (error: Error): void => resolve({ code: null, error });
+        current.once("error", onError);
+        current.once("close", (code) => {
+          current.off("error", onError);
+          resolve({ code });
+        });
+      });
+      const logs = createInterface({ input: stderr, crlfDelay: Infinity });
+      logs.on("line", (line) => this.captureDiagnostic(line));
+      logs.on("error", (error) => {
+        if (!signal.aborted) this.warn("CAPTURE_STREAM", errorText(error));
       });
       try {
-        for await (const frame of reader.read(child.stdout)) this.enqueue(frame);
+        const reader = new CaptureReader(this.frameBytes);
+        for await (const frame of reader.read(stdout)) this.enqueue(frame);
       } catch (error) {
         if (!signal.aborted) this.warn("CAPTURE_STREAM", errorText(error));
       }
-      const result = await exit;
+      const result = await exit.finally(() => logs.close());
       if (signal.aborted) return;
       if (result.error) throw result.error;
       if (result.code === 3) throw new Error("PERM_DENIED: audio capture permission denied");
-      if (result.code === 0 || result.code === 2 || result.code === 4) {
+      if (result.code === 0 || result.code === 2) {
         throw new Error(`Audio capture exited with code ${result.code}`);
       }
-      this.warn("CAPTURE_RESTART", "Audio capture exited. Waiting for its managed restart.");
       const deadline = performance.now() + CAPTURE_RESTART_WAIT_MS;
       const previous = child;
       do {
@@ -330,6 +350,20 @@ class Recording {
       if (child === previous || !child) throw new Error("Audio capture restart timed out");
     }
     if (!signal.aborted) throw new Error("Audio capture stdout is unavailable");
+  }
+
+  private captureDiagnostic(line: string): void {
+    console.error(line);
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (typeof value === "object" && value !== null && "lvl" in value && value.lvl === "warn"
+      && "code" in value && typeof value.code === "string" && "msg" in value && typeof value.msg === "string") {
+      this.emit({ type: "warn", code: value.code, msg: value.msg });
+    }
   }
 
   private enqueue(frame: Buffer): void {
@@ -359,6 +393,7 @@ class Recording {
           this.emit({ type: "level", ...measureLevel(frame), tsMs: Date.now() });
         }
         const probabilities = await vad.processFrame(frame);
+        if (this.active?.failed) this.resetFailedSegment();
         await this.execute(this.segmenter.processFrame(frame, probabilities));
         this.setVad(this.segmenter.vadState);
         await this.log.flush();
@@ -373,7 +408,10 @@ class Recording {
   private async execute(actions: SegmenterAction[]): Promise<void> {
     for (const action of actions) {
       if (action.type === "OPEN") {
-        await this.openSegment(action);
+        if (!await this.openSegment(action)) {
+          this.resetFailedSegment();
+          return;
+        }
       } else if (action.type === "WARN") {
         this.warn(action.code, action.msg);
       } else {
@@ -381,42 +419,75 @@ class Recording {
         if (!segment || segment.id !== action.segmentId) throw new Error("ASR segment is out of sequence");
         if (action.type === "FINISH") {
           await this.finishSegment(segment, action);
-        } else if (!segment.transportError) {
-          segment.session.pushAudio(action.pcm);
+        } else if (!segment.failed) {
+          this.pushSegmentAudio(segment, action.pcm, action.type === "TAIL_SILENCE");
         }
+      }
+      if (this.active?.failed) {
+        this.resetFailedSegment();
+        return;
       }
     }
   }
 
-  private async openSegment(action: Extract<SegmenterAction, { type: "OPEN" }>): Promise<void> {
+  private async openSegment(action: Extract<SegmenterAction, { type: "OPEN" }>): Promise<boolean> {
     if (this.active) throw new Error("An ASR segment is already open");
     this.openedSegmentId = action.segmentId;
-    const session = await this.adapter.openSession({
-      language: "Chinese", chunkMs: this.frameMs, context: this.hotwords.toPromptContext(),
-    });
+    const context = this.hotwords.toPromptContext();
+    let session: AsrSession;
+    try {
+      session = await this.adapter.openSession({ language: "Chinese", chunkMs: this.frameMs, context });
+    } catch (error) {
+      this.warn("ASR_SESSION_ERROR", errorText(error));
+      return false;
+    }
     const segment: ActiveSegment = {
-      id: action.segmentId, session, openedAt: Date.now(), nextSeq: 1, finishing: false,
+      id: action.segmentId, session, openedAt: Date.now(), nextSeq: 1, audioBytes: 0, failed: false,
     };
     this.active = segment;
     session.onDelta((text) => {
-      if (this.active !== segment || !text) return;
+      if (this.active !== segment || segment.failed || !text) return;
       const tsMs = Date.now();
       this.ensureSegmentStart(segment, tsMs);
       this.record({ type: "transcript.delta", segmentId: segment.id, seq: segment.nextSeq++, text, tsMs });
     });
-    session.onError((error) => {
-      segment.transportError = error;
-      if (!segment.finishing) this.fail(error);
-    });
-    for (const frame of action.preroll) session.pushAudio(frame);
+    session.onError((error) => this.abortSegment(segment, error));
+    for (const frame of action.preroll) {
+      if (segment.failed) break;
+      this.pushSegmentAudio(segment, frame);
+    }
+    return true;
+  }
+
+  private pushSegmentAudio(segment: ActiveSegment, pcm: Buffer, tailSilence = false): void {
+    try {
+      segment.session.pushAudio(pcm);
+      if (!tailSilence) segment.audioBytes += pcm.length;
+    } catch (error) {
+      this.abortSegment(segment, error);
+    }
+  }
+
+  private abortSegment(segment: ActiveSegment, error: unknown): void {
+    if (this.active !== segment || segment.failed) return;
+    segment.failed = true;
+    segment.session.abort();
+    this.warn("ASR_SESSION_ERROR", errorText(error));
+  }
+
+  private resetFailedSegment(): void {
+    // Reset VAD onset without sending END to a transport that was already aborted.
+    this.segmenter.stop();
+    const segment = this.active;
+    if (segment) {
+      this.closeSegment(segment, "stop", segment.audioBytes * 1000 / (SAMPLE_RATE * SAMPLE_BYTES));
+    }
   }
 
   private async finishSegment(segment: ActiveSegment, action: FinishAction): Promise<void> {
-    segment.finishing = true;
     if (action.reason !== "stop") this.setVad(action.reason === "pause" ? "pausing" : "rotating");
     let timer: NodeJS.Timeout | undefined;
     try {
-      if (segment.transportError) throw segment.transportError;
       await Promise.race([
         segment.session.finish(),
         new Promise<never>((_, reject) => {
@@ -424,14 +495,17 @@ class Recording {
         }),
       ]);
     } catch (error) {
-      segment.session.abort();
-      this.warn("ASR_FINISH_FAILED", errorText(error));
+      this.abortSegment(segment, error);
     } finally {
       clearTimeout(timer);
-      this.ensureSegmentStart(segment, segment.openedAt);
-      this.record({ type: "segment.end", segmentId: segment.id, reason: action.reason, durMs: action.durMs });
-      this.active = undefined;
+      this.closeSegment(segment, action.reason, action.durMs);
     }
+  }
+
+  private closeSegment(segment: ActiveSegment, reason: FinishAction["reason"], durMs: number): void {
+    this.ensureSegmentStart(segment, segment.openedAt);
+    this.record({ type: "segment.end", segmentId: segment.id, reason, durMs });
+    this.active = undefined;
   }
 
   private ensureSegmentStart(segment: ActiveSegment, tsMs: number): void {
@@ -466,10 +540,12 @@ class Scheduler {
   private readonly adapter: AsrAdapter;
   private readonly ws: SchedulerWsServer;
   private readonly shutdownSignal = new AbortController();
+  private readonly restoredClients = new WeakSet<WebSocket>();
   private recording?: Recording;
   private recordingTask?: Promise<void>;
   private devicesTask?: Promise<Extract<ServerMessage, { type: "devices" }>>;
   private shutdownTask?: Promise<void>;
+  private hasTranscript = false;
   private state: StateMessage = { type: "state", state: "idle", vad: "idle" };
 
   constructor(private readonly options: CliOptions) {
@@ -530,6 +606,7 @@ class Scheduler {
         });
         this.ws.send(ws, this.state);
         this.ws.send(ws, this.hotwordsMessage());
+        await this.restoreTranscript(ws);
         break;
       case "devices.list":
         this.ws.send(ws, await this.listDevices());
@@ -571,6 +648,19 @@ class Scheduler {
     }
   }
 
+  private async restoreTranscript(ws: WebSocket): Promise<void> {
+    const canRestore = (): boolean => this.state.state === "idle" && !this.recording && !this.hasTranscript
+      && !this.restoredClients.has(ws) && !this.shutdownSignal.signal.aborted;
+    if (!canRestore()) return;
+
+    const records = await loadLatestSessionRecords(undefined, join(DATA_DIR, "exports"));
+    if (!canRestore()) return;
+    this.restoredClients.add(ws);
+    for (const record of records) {
+      if (record.type !== "hotwords") this.ws.send(ws, record);
+    }
+  }
+
   private listDevices(): Promise<Extract<ServerMessage, { type: "devices" }>> {
     return this.devicesTask ??= this.readDevices().finally(() => {
       this.devicesTask = undefined;
@@ -603,7 +693,10 @@ class Scheduler {
     const recording = new Recording(
       this.adapter,
       this.hotwords,
-      (message) => this.ws.broadcast(message),
+      (message) => {
+        if (message.type === "transcript.delta") this.hasTranscript = true;
+        this.ws.broadcast(message);
+      },
       (state, vad) => {
         if (this.state.state !== "stopping") this.setState(state ?? this.state.state, vad);
       },
