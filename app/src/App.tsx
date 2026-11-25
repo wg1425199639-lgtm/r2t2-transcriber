@@ -37,6 +37,11 @@ export function App() {
   const [lastExportPath, setLastExportPath] = useState<string>();
   const [exportNotice, setExportNotice] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [overlayClickThrough, setOverlayClickThrough] = useState(true);
+  const [overlayNotice, setOverlayNotice] = useState("");
+  const overlayPopup = useRef<Window | null>(null);
+  const overlayBusy = useRef(false);
   const hasTranscript = segments.some((segment) => segment.text.trim());
 
   useEffect(() => {
@@ -45,6 +50,57 @@ export function App() {
   }, []);
 
   const toggleSidebar = useCallback(() => setSidebarCollapsed((collapsed) => !collapsed), []);
+  const toggleOverlay = useCallback(async () => {
+    if (overlayBusy.current) return;
+    overlayBusy.current = true;
+    setOverlayNotice("");
+    try {
+      if (isTauri()) {
+        setOverlayOpen(await invoke<boolean>("toggle_overlay_window", { clickThrough: overlayClickThrough }));
+      } else if (overlayPopup.current && !overlayPopup.current.closed) {
+        overlayPopup.current.close();
+        overlayPopup.current = null;
+        setOverlayOpen(false);
+      } else {
+        overlayPopup.current = window.open("?view=overlay", "r2t2-overlay", "width=760,height=116");
+        setOverlayOpen(overlayPopup.current !== null);
+        if (!overlayPopup.current) setOverlayNotice("浏览器阻止了悬浮字幕窗口。");
+      }
+    } catch {
+      setOverlayNotice("无法切换悬浮字幕，请重试。");
+    } finally {
+      overlayBusy.current = false;
+    }
+  }, [overlayClickThrough]);
+
+  const toggleOverlayClickThrough = async () => {
+    if (overlayBusy.current) return;
+    overlayBusy.current = true;
+    const next = !overlayClickThrough;
+    setOverlayNotice("");
+    try {
+      if (isTauri()) await invoke("set_overlay_click_through", { enabled: next });
+      setOverlayClickThrough(next);
+    } catch {
+      setOverlayNotice("无法切换鼠标穿透，请重试。");
+    } finally {
+      overlayBusy.current = false;
+    }
+  };
+
+  useEffect(() => {
+    const closePopup = () => {
+      overlayPopup.current?.close();
+      overlayPopup.current = null;
+      setOverlayOpen(false);
+    };
+    window.addEventListener("pagehide", closePopup);
+    return () => {
+      window.removeEventListener("pagehide", closePopup);
+      overlayPopup.current?.close();
+    };
+  }, []);
+
   const renderSegment = useCallback((segment: TranscriptSegment) => (
     <Segment segment={segment} hotwords={hotwords} />
   ), [hotwords]);
@@ -114,11 +170,14 @@ export function App() {
       } else if (!event.shiftKey && key.toLowerCase() === "e") {
         event.preventDefault();
         if (!event.repeat) exportMarkdown();
+      } else if (!event.shiftKey && key.toLowerCase() === "l" && !event.repeat) {
+        event.preventDefault();
+        void toggleOverlay();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [exportMarkdown]);
+  }, [exportMarkdown, toggleOverlay]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)] text-[var(--text)]">
@@ -134,8 +193,16 @@ export function App() {
         />
       </div>
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
+        <TopBar
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+          overlayOpen={overlayOpen}
+          overlayClickThrough={overlayClickThrough}
+          onToggleOverlay={toggleOverlay}
+          onToggleOverlayClickThrough={toggleOverlayClickThrough}
+        />
         <MemoTranscript segments={segments} fontSize={FONT_SIZES[fontIndex]} renderSegment={renderSegment} />
+        {overlayNotice && <p role="status" className="px-6 py-2 text-sm text-[var(--text-2)]">{overlayNotice}</p>}
         {copyFailed && <p role="status" className="px-6 py-2 text-sm text-[var(--text-2)]">复制失败，请重试。</p>}
       </main>
     </div>

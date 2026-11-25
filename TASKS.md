@@ -205,7 +205,7 @@
 - 目标：`?view=overlay` 渲染广播级双行悬浮字幕胶囊（`DESIGN.md` §6.1：深色毛玻璃、双行限流、热词微亮、5s 无新字自动呼吸弱化至 `0.18` 透明度、支持 `?view=overlay&obs=1` 纯透明无外框模式）；`main.tsx` 按 URL query 路由至 `CaptionOverlay` 或 `App`。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run src/components/CaptionOverlay.test.tsx && npm run build`
 
-**M5-02 [Sol] Tauri 透明置顶副窗口 + 鼠标穿透与 `⌘L` 接线**
+- [x] **M5-02 [Sol] Tauri 透明置顶副窗口 + 鼠标穿透与 `⌘L` 接线**
 - 范围：`app/src-tauri/src/main.rs`、`app/src-tauri/capabilities/default.json`、`app/src/components/TopBar.tsx`、`app/src/App.tsx`
 - 目标：Rust 新增 `toggle_overlay_window`（动态创建/显隐 `overlay` 透明无边框置顶窗口 `760×116`）与 `set_overlay_click_through(enabled: bool)`（调用 `set_ignore_cursor_events`）；顶栏新增克制的「悬浮字幕 (`⌘L`)」与「穿透锁定」按钮并绑定 `⌘L` 快捷键，同时在 `index.html`/`global.css` 确保 overlay 模式下 `html/body` 透明。
 - 验收：`cd app && npx tsc --noEmit && npm run build && cd src-tauri && cargo check`

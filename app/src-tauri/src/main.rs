@@ -213,10 +213,97 @@ fn write_export_file(
     Err("No available export filename".into())
 }
 
+#[tauri::command]
+fn toggle_overlay_window(
+    app: tauri::AppHandle,
+    visible: Option<bool>,
+    click_through: Option<bool>,
+) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("overlay") {
+        let show = visible.unwrap_or_else(|| !window.is_visible().unwrap_or(false));
+        if show {
+            if let Some(enabled) = click_through {
+                window
+                    .set_ignore_cursor_events(enabled)
+                    .map_err(|error| error.to_string())?;
+            }
+            window.show().map_err(|error| error.to_string())?;
+        } else {
+            window.hide().map_err(|error| error.to_string())?;
+        }
+        return Ok(show);
+    }
+    if visible == Some(false) {
+        return Ok(false);
+    }
+
+    const WIDTH: f64 = 760.0;
+    const HEIGHT: f64 = 116.0;
+    const BOTTOM_MARGIN: f64 = 64.0;
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "overlay",
+        tauri::WebviewUrl::App("index.html?view=overlay".into()),
+    )
+    .inner_size(WIDTH, HEIGHT)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false)
+    .focusable(false)
+    .shadow(false)
+    .visible(false);
+    let builder = match app.primary_monitor() {
+        Ok(Some(monitor)) => {
+            let work_area = monitor.work_area();
+            let scale = monitor.scale_factor();
+            let origin = work_area.position.to_logical::<f64>(scale);
+            let size = work_area.size.to_logical::<f64>(scale);
+            builder.position(
+                origin.x + (size.width - WIDTH) / 2.0,
+                origin.y + size.height - HEIGHT - BOTTOM_MARGIN,
+            )
+        }
+        _ => builder.center(),
+    };
+    let window = builder.build().map_err(|error| error.to_string())?;
+    window
+        .set_ignore_cursor_events(click_through.unwrap_or(true))
+        .and_then(|()| window.show())
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn set_overlay_click_through(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("overlay") {
+        window
+            .set_ignore_cursor_events(enabled)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(Scheduler::default())
-        .invoke_handler(tauri::generate_handler![reveal_in_finder, write_export_file])
+        .invoke_handler(tauri::generate_handler![
+            reveal_in_finder,
+            write_export_file,
+            toggle_overlay_window,
+            set_overlay_click_through
+        ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(overlay) = window.get_webview_window("overlay") {
+                    if let Err(error) = overlay.close() {
+                        eprintln!("Could not close overlay: {error}");
+                    }
+                }
+            }
+        })
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
             app.state::<Scheduler>().start(resource_dir.as_deref())?;

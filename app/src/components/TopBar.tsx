@@ -1,4 +1,4 @@
-import { PanelLeft } from "lucide-react";
+import { Captions, Lock, LockOpen, PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { sessionStore, useSessionStore } from "../store/session";
 import { LevelMeter } from "./LevelMeter";
@@ -9,6 +9,10 @@ import { Button } from "./ui/button";
 interface TopBarProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  overlayOpen: boolean;
+  overlayClickThrough: boolean;
+  onToggleOverlay: () => void;
+  onToggleOverlayClickThrough: () => void;
 }
 
 function formatElapsed(seconds: number): string {
@@ -17,7 +21,14 @@ function formatElapsed(seconds: number): string {
     .join(":");
 }
 
-export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
+export function TopBar({
+  sidebarCollapsed,
+  onToggleSidebar,
+  overlayOpen,
+  overlayClickThrough,
+  onToggleOverlay,
+  onToggleOverlayClickThrough,
+}: TopBarProps) {
   const { connectionStatus, devices, level, sessionState } = useSessionStore();
   const [source, setSource] = useState<SourceSelection>({ source: "system" });
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
@@ -27,6 +38,8 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
   const captureActive = recording || stopping || sessionState === "starting";
   const actionDisabled = connectionStatus !== "connected" || (captureActive && !recording);
   const stoppingAction = recording || stopping;
+  const OverlayLock = overlayClickThrough ? Lock : LockOpen;
+  const lockTitle = overlayClickThrough ? "鼠标穿透已锁定，点击解锁拖拽" : "字幕可拖拽，点击锁定鼠标穿透";
 
   useEffect(() => {
     if (captureActive) {
@@ -71,7 +84,7 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
   }, [onToggleSidebar, toggleRecording]);
 
   return (
-    <header className={`@container flex h-11 shrink-0 select-none items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] pr-3 ${sidebarCollapsed ? "pl-[84px]" : "pl-3"}`}>
+    <header className={`@container flex h-11 shrink-0 select-none items-center gap-2 border-b border-[var(--border)] bg-[var(--bg)] pr-3 ${sidebarCollapsed ? "pl-[84px]" : "pl-3"}`}>
       <Button
         variant="ghost"
         size="icon"
@@ -89,7 +102,36 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
         sessionState={sessionState}
         startedAtMs={startedAtMs}
       />
-      <div aria-hidden="true" className="h-full min-w-4 flex-1" data-tauri-drag-region />
+      <div aria-hidden="true" className="h-full min-w-0 flex-1" data-tauri-drag-region />
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          size="sm"
+          variant={overlayOpen ? "outline" : "ghost"}
+          title="悬浮字幕 (⌘L)"
+          aria-label="悬浮字幕"
+          aria-keyshortcuts="Meta+L"
+          aria-pressed={overlayOpen}
+          onClick={onToggleOverlay}
+          className="gap-1 px-2 text-xs text-[var(--text-2)] [&_svg]:size-[15px]"
+        >
+          <Captions size={15} strokeWidth={1.5} aria-hidden="true" />
+          <span className="hidden @[44rem]:inline">字幕</span>
+        </Button>
+        {overlayOpen && (
+          <Button
+            size="sm"
+            variant={overlayClickThrough ? "outline" : "ghost"}
+            title={lockTitle}
+            aria-label="鼠标穿透"
+            aria-pressed={overlayClickThrough}
+            onClick={onToggleOverlayClickThrough}
+            className="gap-1 px-2 text-xs text-[var(--text-2)] [&_svg]:size-[14px]"
+          >
+            <OverlayLock size={14} strokeWidth={1.5} aria-hidden="true" />
+            <span>{overlayClickThrough ? "穿透" : "可拖"}</span>
+          </Button>
+        )}
+      </div>
       {stoppingAction && (
         <div aria-label="录制时长" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-sm tabular-nums text-[var(--text-2)]">
           <span aria-hidden="true" className="size-2 rounded-full bg-[var(--danger)]" />
