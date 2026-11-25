@@ -40,7 +40,7 @@
 ---
 ## Milestone 1 — Mac Swift 内录 CLI
 
-**M1-01 [Sol] Swift 包骨架 + 参数解析 + `--list-devices`**
+- [x] **M1-01 [Sol] Swift 包骨架 + 参数解析 + `--list-devices`**
 - 范围：`capture/mac/Package.swift`、`Sources/capture-mac/main.swift`、`Devices.swift`
 - 目标：按契约解析参数，退出码规范；`--list-devices` 输出 JSON。
 - 验收：`cd capture/mac && swift build -c release && .build/release/capture-mac --list-devices | python3 -c "import sys,json;json.load(sys.stdin)['devices']"`
