@@ -12,6 +12,7 @@ import {
   ASR_MODEL_PATH, BYTES_PER_SAMPLE, CAPTURE_PATH, CHANNELS, FRAME_BYTES, FRAME_MS,
   SAMPLE_RATE, SHORT_FRAME_BYTES, SHORT_FRAME_MS, WS_PORT,
 } from "./config.js";
+import { exportSession } from "./export.js";
 import { HotwordsStore } from "./hotwords-store.js";
 import { measureLevel } from "./level-meter.js";
 import { ManagedProcess } from "./process-manager.js";
@@ -161,7 +162,8 @@ interface ActiveSegment {
 class Recording {
   private readonly controller = new AbortController();
   private readonly segmenter = new Segmenter();
-  private readonly log = new TranscriptLog(randomUUID());
+  readonly sessionId = randomUUID();
+  readonly log = new TranscriptLog(this.sessionId);
   private readonly pending: Buffer[] = [];
   private readonly frameBytes: number;
   private readonly pendingCapacity: number;
@@ -551,9 +553,21 @@ class Scheduler {
         this.hotwords.set({ hotwords: message.hotwords, background: message.background });
         this.ws.broadcast(this.hotwordsMessage());
         break;
-      case "export.request":
-        this.ws.send(ws, { type: "error", code: "NOT_IMPLEMENTED", msg: "Transcript export is not implemented yet" });
+      case "export.request": {
+        const recording = this.recording;
+        const sessionId = message.sessionId || "latest";
+        try {
+          await recording?.log.flush();
+          const { path } = await exportSession({
+            sessionId: sessionId === "latest" ? recording?.sessionId ?? "latest" : sessionId,
+            format: message.format,
+          });
+          this.ws.send(ws, { type: "export.ready", path });
+        } catch (error) {
+          this.ws.send(ws, { type: "error", code: "EXPORT_FAILED", msg: errorText(error) });
+        }
         break;
+      }
     }
   }
 

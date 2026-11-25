@@ -170,7 +170,7 @@
 ---
 ## Milestone 4 — 导出、恢复、打包
 
-**M4-01 [Sol] 导出 Markdown/TXT**
+- [x] **M4-01 [Sol] 导出 Markdown/TXT**
 - 范围：`scheduler/src/export.ts`、`export.test.ts`
 - 目标：从 jsonl 生成 `.md`（含时间戳标题、分段）与 `.txt`（纯文本）。
 - 验收：`cd scheduler && npx vitest run src/export.test.ts`
