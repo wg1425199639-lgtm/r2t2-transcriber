@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Segment } from "./components/Segment";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -16,27 +17,26 @@ function transcriptText(): string {
     .join("\n\n");
 }
 
-function downloadTranscript(format: "md" | "txt"): void {
-  const text = transcriptText();
-  if (!text) return;
-
+function downloadTranscript(format: "md" | "txt", text: string, defaultName: string): void {
   const type = format === "md" ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8";
   const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `转写.${format}`;
+  link.download = defaultName;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
-const exportMarkdown = () => downloadTranscript("md");
-const exportTxt = () => downloadTranscript("txt");
 
 export function App() {
   const { hotwords, segments } = useSessionStore();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [fontIndex, setFontIndex] = useState(FONT_SIZES.indexOf(20));
   const [copyFailed, setCopyFailed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | undefined>(undefined);
+  const [lastExportPath, setLastExportPath] = useState<string>();
+  const [exportNotice, setExportNotice] = useState("");
+  const [exporting, setExporting] = useState(false);
   const hasTranscript = segments.some((segment) => segment.text.trim());
 
   useEffect(() => {
@@ -49,13 +49,56 @@ export function App() {
     <Segment segment={segment} hotwords={hotwords} />
   ), [hotwords]);
 
+  const exportTranscript = useCallback(async (format: "md" | "txt") => {
+    const text = transcriptText();
+    if (!text || exporting) return;
+    const defaultName = `转写.${format}`;
+    setExportNotice("");
+
+    if (isTauri()) {
+      setExporting(true);
+      try {
+        setLastExportPath(await invoke<string>("write_export_file", { defaultName, content: text }));
+        return;
+      } catch {
+        setExportNotice("无法写入下载目录，已发起下载。");
+      } finally {
+        setExporting(false);
+      }
+    } else {
+      setExportNotice("已发起浏览器下载。");
+    }
+
+    downloadTranscript(format, text, defaultName);
+  }, [exporting]);
+
+  const exportMarkdown = useCallback(() => void exportTranscript("md"), [exportTranscript]);
+  const exportTxt = useCallback(() => void exportTranscript("txt"), [exportTranscript]);
+
+  const revealExport = async () => {
+    if (!lastExportPath || !isTauri()) return;
+    try {
+      await invoke("reveal_in_finder", { path: lastExportPath });
+      setExportNotice("");
+    } catch {
+      setExportNotice("无法定位导出文件，请重新导出。");
+    }
+  };
+
+  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
+
   const copyAll = useCallback(async () => {
     const text = transcriptText();
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
       setCopyFailed(false);
+      setCopied(true);
+      window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
     } catch {
+      setCopied(false);
+      window.clearTimeout(copyTimer.current);
       setCopyFailed(true);
     }
   }, []);
@@ -75,15 +118,19 @@ export function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [exportMarkdown]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <div className={sidebarCollapsed ? "hidden" : "flex shrink-0"}>
         <Sidebar
-          onExportMarkdown={hasTranscript ? exportMarkdown : undefined}
-          onExportTxt={hasTranscript ? exportTxt : undefined}
+          onExportMarkdown={hasTranscript && !exporting ? exportMarkdown : undefined}
+          onExportTxt={hasTranscript && !exporting ? exportTxt : undefined}
           onCopyAll={hasTranscript ? copyAll : undefined}
+          copied={copied}
+          lastExportPath={lastExportPath}
+          onRevealExport={isTauri() ? revealExport : undefined}
+          notice={exportNotice}
         />
       </div>
       <main className="flex min-w-0 flex-1 flex-col">

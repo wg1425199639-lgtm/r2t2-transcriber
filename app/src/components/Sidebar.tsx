@@ -1,16 +1,9 @@
 import { sessionStore, useSessionStore } from "../store/session";
+import { ExportPanel } from "./ExportPanel";
+import type { ExportPanelProps } from "./ExportPanel";
 import { HotwordEditor } from "./HotwordEditor";
-import { Button } from "./ui/button";
 
-const exportButtonClass = "h-8 rounded-[8px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[13px] text-[var(--text)] hover:bg-[var(--bg)] enabled:hover:bg-[var(--bg)]";
-
-interface SidebarProps {
-  onExportMarkdown?: () => void;
-  onExportTxt?: () => void;
-  onCopyAll?: () => void;
-}
-
-export function Sidebar({ onExportMarkdown, onExportTxt, onCopyAll }: SidebarProps) {
+export function Sidebar(props: ExportPanelProps) {
   const { hotwords, background, appliesFromSegment } = useSessionStore();
 
   return (
@@ -24,17 +17,7 @@ export function Sidebar({ onExportMarkdown, onExportTxt, onCopyAll }: SidebarPro
           onSave={sessionStore.setHotwords}
         />
       </div>
-      <div role="group" aria-label="导出" className="border-t border-[var(--border)] p-3 grid grid-cols-2 gap-2 shrink-0">
-        <Button size="sm" variant="outline" className={`col-span-2 ${exportButtonClass}`} onClick={onExportMarkdown} disabled={!onExportMarkdown}>
-          导出 Markdown
-        </Button>
-        <Button size="sm" variant="outline" className={exportButtonClass} onClick={onExportTxt} disabled={!onExportTxt}>
-          导出 TXT
-        </Button>
-        <Button size="sm" variant="outline" className={exportButtonClass} onClick={onCopyAll} disabled={!onCopyAll}>
-          复制全文
-        </Button>
-      </div>
+      <ExportPanel {...props} />
     </aside>
   );
 }

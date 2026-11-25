@@ -175,7 +175,7 @@
 - 目标：从 jsonl 生成 `.md`（含时间戳标题、分段）与 `.txt`（纯文本）。
 - 验收：`cd scheduler && npx vitest run src/export.test.ts`
 
-**M4-02 [Sol] 前端导出区**
+- [x] **M4-02 [Sol] 前端导出区**
 - 范围：`components/ExportPanel.tsx`、`app/src-tauri/src/main.rs`（保存对话框）
 - 目标：一键导出，复制全文，打开所在目录。
 - 验收：`cd app && npm run build && cd src-tauri && cargo check`

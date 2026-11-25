@@ -1,5 +1,6 @@
 use std::{
-    env, io,
+    env, fs,
+    io::{self, Write},
     net::TcpStream,
     os::unix::{fs::PermissionsExt, process::CommandExt},
     path::{Path, PathBuf},
@@ -133,9 +134,70 @@ fn signal(pid: i32, number: i32) {
     }
 }
 
+#[tauri::command]
+fn reveal_in_finder(path: String) -> Result<(), String> {
+    let path = Path::new(&path);
+    if !path.is_absolute() || !path.is_file() {
+        return Err("Export file does not exist".into());
+    }
+
+    #[cfg(target_os = "macos")]
+    let result = Command::new("/usr/bin/open").arg("-R").arg(path).status();
+    #[cfg(target_os = "windows")]
+    let result = Command::new("explorer").arg("/select,").arg(path).status();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let result = Err::<std::process::ExitStatus, _>(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Revealing files is unsupported on this platform",
+    ));
+
+    let status = result.map_err(|error| error.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Could not reveal export file ({status})"))
+    }
+}
+
+#[tauri::command]
+fn write_export_file(
+    app: tauri::AppHandle,
+    default_name: String,
+    content: String,
+) -> Result<String, String> {
+    let extension = match default_name.as_str() {
+        "转写.md" => "md",
+        "转写.txt" => "txt",
+        _ => return Err("Invalid export filename".into()),
+    };
+    let directory = app.path().download_dir().map_err(|error| error.to_string())?;
+    for index in 0..1000 {
+        let filename = if index == 0 {
+            default_name.clone()
+        } else {
+            format!("转写 ({index}).{extension}")
+        };
+        let path = directory.join(filename);
+        let export_path = path.to_str().ok_or("Invalid export path")?.to_owned();
+        let mut file = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        };
+        if let Err(error) = file.write_all(content.as_bytes()) {
+            drop(file);
+            let _ = fs::remove_file(&path);
+            return Err(error.to_string());
+        }
+        return Ok(export_path);
+    }
+    Err("No available export filename".into())
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(Scheduler::default())
+        .invoke_handler(tauri::generate_handler![reveal_in_finder, write_export_file])
         .setup(|app| {
             app.state::<Scheduler>().start()?;
             Ok(())
