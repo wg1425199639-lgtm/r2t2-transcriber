@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatExportContent } from "../App";
 import { SchedulerWsClient } from "./ws-client";
 import type { ServerMessage } from "./ws-client";
 import { SessionStore } from "../store/session";
@@ -126,6 +127,55 @@ describe("SchedulerWsClient", () => {
 });
 
 describe("SessionStore", () => {
+  it("toggles bookmarks on non-empty segments and keeps them through deltas and completion", () => {
+    const store = new SessionStore(client);
+    store.connect();
+    const socket = latestSocket();
+    socket.open();
+    const emit = (message: ServerMessage) => socket.receive(JSON.stringify(message));
+    expect(store.toggleLatestBookmark()).toBe(false);
+
+    emit({ type: "transcript.delta", segmentId: 1, seq: 1, text: "重点", tsMs: 10 });
+    emit({ type: "transcript.delta", segmentId: 2, seq: 1, text: " \t", tsMs: 20 });
+    const before = store.getSnapshot();
+    expect(store.toggleBookmark(2)).toBe(false);
+    expect(store.getSnapshot()).toBe(before);
+    expect(store.toggleLatestBookmark()).toBe(true);
+    expect(store.getSnapshot().segments[1]).toBe(before.segments[1]);
+    expect(before.segments[0]).not.toHaveProperty("bookmarked");
+
+    emit({ type: "transcript.delta", segmentId: 1, seq: 2, text: "内容", tsMs: 30 });
+    expect(store.getSnapshot().segments[0]).toMatchObject({ text: "重点内容", active: true, bookmarked: true });
+    emit({ type: "segment.end", segmentId: 1, reason: "pause", durMs: 100 });
+    expect(store.getSnapshot().segments[0]).toMatchObject({ active: false, bookmarked: true });
+    expect(store.toggleBookmark(1)).toBe(false);
+    expect(store.getSnapshot().segments[0]).not.toHaveProperty("bookmarked");
+    store.dispose();
+  });
+
+  it("selects the requested recording when segment IDs are reused", () => {
+    const store = new SessionStore(client);
+    store.connect();
+    const socket = latestSocket();
+    socket.open();
+    const emit = (message: ServerMessage) => socket.receive(JSON.stringify(message));
+    emit({ type: "transcript.delta", segmentId: 1, seq: 1, text: "第一轮", tsMs: 10 });
+    emit({ type: "state", state: "starting", vad: "idle" });
+    emit({ type: "segment.start", segmentId: 1, tsMs: 20 });
+    expect(store.toggleBookmark(1)).toBe(true);
+    expect(store.getSnapshot().segments.map((segment) => segment.bookmarked)).toEqual([true, undefined]);
+
+    emit({ type: "transcript.delta", segmentId: 1, seq: 1, text: "第二轮", tsMs: 30 });
+    expect(store.toggleBookmark(1, 10)).toBe(false);
+    expect(store.toggleBookmark(1, 30)).toBe(false);
+    expect(store.toggleBookmark(1)).toBe(true);
+    expect(store.getSnapshot().segments.map((segment) => segment.bookmarked)).toEqual([undefined, true]);
+    expect(store.toggleLatestBookmark()).toBe(false);
+    expect(store.toggleBookmark(1, 10)).toBe(true);
+    expect(store.getSnapshot().segments.map((segment) => segment.bookmarked)).toEqual([true, undefined]);
+    store.dispose();
+  });
+
   it("appends increasing deltas per segment and drops empty completed segments", () => {
     const store = new SessionStore(client);
     store.connect();
@@ -171,5 +221,31 @@ describe("SessionStore", () => {
     delta(1, 2, "继续");
     expect(store.getSnapshot().segments[0].text).toBe("继续");
     store.dispose();
+  });
+});
+
+describe("formatExportContent", () => {
+  const first = { segmentId: 1, startedAtMs: new Date(2026, 0, 1, 3, 4, 5).getTime(), text: "第一行\n第二行", active: false };
+  const second = { ...first, segmentId: 2, startedAtMs: first.startedAtMs + 1000, text: "普通段落" };
+  const blank = { ...first, segmentId: 3, text: " \t\n", bookmarked: true };
+
+  it("summarizes bookmarked paragraphs above the full Markdown transcript", () => {
+    const longText = "长".repeat(101);
+    const segments = [{ ...first, bookmarked: true }, { ...second, text: longText, bookmarked: true }, blank];
+    expect(formatExportContent(segments, "md")).toBe(
+      "# 实时语音转写记录\n\n## 重点打点速览\n\n"
+      + "- [03:04:05] 第一行 第二行\n"
+      + `- [03:04:06] ${"长".repeat(100)}…\n\n## 全文记录\n\n`
+      + `[03:04:05] 第一行\n第二行\n\n[03:04:06] ${longText}`,
+    );
+  });
+
+  it("omits the overview when no non-empty paragraph is bookmarked and preserves plain text", () => {
+    expect(formatExportContent([first, second, blank], "md")).toBe(
+      "# 实时语音转写记录\n\n[03:04:05] 第一行\n第二行\n\n[03:04:06] 普通段落",
+    );
+    expect(formatExportContent([{ ...first, bookmarked: true }, second, blank], "txt")).toBe("第一行\n第二行\n\n普通段落");
+    expect(formatExportContent([blank], "md")).toBe("");
+    expect(formatExportContent([blank], "txt")).toBe("");
   });
 });

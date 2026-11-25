@@ -210,7 +210,7 @@
 - 目标：Rust 新增 `toggle_overlay_window`（动态创建/显隐 `overlay` 透明无边框置顶窗口 `760×116`）与 `set_overlay_click_through(enabled: bool)`（调用 `set_ignore_cursor_events`）；顶栏新增克制的「悬浮字幕 (`⌘L`)」与「穿透锁定」按钮并绑定 `⌘L` 快捷键，同时在 `index.html`/`global.css` 确保 overlay 模式下 `html/body` 透明。
 - 验收：`cd app && npx tsc --noEmit && npm run build && cd src-tauri && cargo check`
 
-**M5-03 [Sol] `⌘M` 重点金句打点 + Markdown 顶部速览导出**
+- [x] **M5-03 [Sol] `⌘M` 重点金句打点 + Markdown 顶部速览导出**
 - 范围：`app/src/store/session.ts`、`app/src/components/Segment.tsx`、`app/src/App.tsx`、`app/src/lib/ws-client.test.ts`
 - 目标：支持按 `segmentId` 切换重点书签（`⌘M` 标记当前最新/活跃段落，或点击段落悬停 `Bookmark` 图标；已打点段左侧显示 `2px` `--accent` 细竖线）；导出 Markdown 时若有打点段落，顶部自动生成 `# 实时语音转写记录` + `## 重点打点速览`（含 `HH:MM:SS` 与摘要）再输出全文。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`

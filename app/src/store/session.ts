@@ -11,6 +11,7 @@ export interface TranscriptSegment {
   startedAtMs: number;
   text: string;
   active: boolean;
+  bookmarked?: boolean;
   reason?: Message<"segment.end">["reason"];
   durMs?: number;
 }
@@ -93,10 +94,34 @@ export class SessionStore {
 
   refreshDevices = (): boolean => this.client.send({ type: "devices.list" });
 
+  toggleBookmark = (segmentId: number, startedAtMs?: number): boolean =>
+    this.toggleMatchingBookmark((segment) => segment.segmentId === segmentId
+      && (startedAtMs === undefined ? segment.text.trim().length > 0 : segment.startedAtMs === startedAtMs));
+
+  toggleLatestBookmark = (): boolean =>
+    this.toggleMatchingBookmark((segment) => segment.text.trim().length > 0);
+
   clearTranscript = (): void => {
     for (const progress of this.segmentProgress.values()) progress.index = undefined;
     this.update({ segments: [] });
   };
+
+  private toggleMatchingBookmark(matches: (segment: TranscriptSegment) => boolean): boolean {
+    const { segments } = this.snapshot;
+    let index = segments.length - 1;
+    while (index >= 0 && !matches(segments[index])) index--;
+    if (index < 0) return false;
+
+    const segment = { ...segments[index] };
+    const bookmarked = !segment.bookmarked;
+    if (bookmarked) segment.bookmarked = true;
+    else delete segment.bookmarked;
+
+    const next = segments.slice();
+    next[index] = segment;
+    this.update({ segments: next });
+    return bookmarked;
+  }
 
   private update(patch: Partial<SessionSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...patch };

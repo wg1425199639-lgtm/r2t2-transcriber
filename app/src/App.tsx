@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Segment } from "./components/Segment";
+import { formatTimestamp, Segment } from "./components/Segment";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { Transcript } from "./components/Transcript";
@@ -10,11 +10,25 @@ import type { TranscriptSegment } from "./store/session";
 const FONT_SIZES = [18, 20, 22, 24] as const;
 const MemoTranscript = memo(Transcript);
 
-function transcriptText(): string {
-  return sessionStore.getSnapshot().segments
-    .map((segment) => segment.text)
-    .filter((text) => text.trim())
-    .join("\n\n");
+export function formatExportContent(segments: readonly TranscriptSegment[], format: "md" | "txt"): string {
+  const nonEmpty = segments.filter((segment) => segment.text.trim());
+  if (nonEmpty.length === 0) return "";
+  if (format === "txt") return nonEmpty.map((segment) => segment.text).join("\n\n");
+
+  const sections = ["# 实时语音转写记录"];
+  const bookmarks = nonEmpty.filter((segment) => segment.bookmarked);
+  if (bookmarks.length > 0) {
+    const overview = bookmarks.map(({ startedAtMs, text }) => {
+      const characters = Array.from(text.trim().replace(/\s+/g, " "));
+      const summary = characters.length > 100 ? characters.slice(0, 100).join("") + "…" : characters.join("");
+      return `- [${formatTimestamp(startedAtMs)}] ${summary}`;
+    });
+    sections.push(`## 重点打点速览\n\n${overview.join("\n")}`, "## 全文记录");
+  }
+  for (const { startedAtMs, text } of nonEmpty) {
+    sections.push(`[${formatTimestamp(startedAtMs)}] ${text}`);
+  }
+  return sections.join("\n\n");
 }
 
 function downloadTranscript(format: "md" | "txt", text: string, defaultName: string): void {
@@ -102,11 +116,11 @@ export function App() {
   }, []);
 
   const renderSegment = useCallback((segment: TranscriptSegment) => (
-    <Segment segment={segment} hotwords={hotwords} />
+    <Segment segment={segment} hotwords={hotwords} onToggleBookmark={sessionStore.toggleBookmark} />
   ), [hotwords]);
 
   const exportTranscript = useCallback(async (format: "md" | "txt") => {
-    const text = transcriptText();
+    const text = formatExportContent(sessionStore.getSnapshot().segments, format);
     if (!text || exporting) return;
     const defaultName = `转写.${format}`;
     setExportNotice("");
@@ -144,7 +158,7 @@ export function App() {
   useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
   const copyAll = useCallback(async () => {
-    const text = transcriptText();
+    const text = formatExportContent(sessionStore.getSnapshot().segments, "txt");
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
@@ -173,6 +187,9 @@ export function App() {
       } else if (!event.shiftKey && key.toLowerCase() === "l" && !event.repeat) {
         event.preventDefault();
         void toggleOverlay();
+      } else if (!event.shiftKey && key.toLowerCase() === "m" && !event.repeat) {
+        event.preventDefault();
+        sessionStore.toggleLatestBookmark();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
