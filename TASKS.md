@@ -180,7 +180,7 @@
 - 目标：一键导出，复制全文，打开所在目录。
 - 验收：`cd app && npm run build && cd src-tauri && cargo check`
 
-**M4-03 [Sol] 异常恢复：引擎崩溃**
+- [x] **M4-03 [Sol] 异常恢复：引擎崩溃**
 - 范围：`scheduler/src/process-manager.ts`、`scheduler/src/process-manager.test.ts`
 - 目标：kill 引擎后自动重启并续接新分段，前端收 `warn` 且不丢已转写文本。
 - 验收：`cd scheduler && npx vitest run src/process-manager.test.ts`

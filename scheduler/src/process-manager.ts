@@ -6,6 +6,14 @@ const RESTART_WINDOW_MS = 60_000;
 const MAX_RESTARTS = 5;
 const RESTART_DELAYS_MS = [1_000, 2_000, 4_000] as const;
 
+interface RestartPolicy {
+  backoffMs?: readonly number[];
+  windowMs?: number;
+  maxRestartsPerMinute?: number;
+  onWarn?: (message: string) => void;
+  onFatal?: (message: string) => void;
+}
+
 export class ManagedProcess {
   private child?: ChildProcess;
   private restartTimer?: NodeJS.Timeout;
@@ -17,6 +25,7 @@ export class ManagedProcess {
     private readonly command: string,
     private readonly args: readonly string[] = [],
     private readonly options: SpawnOptions = {},
+    private readonly restartPolicy: RestartPolicy = {},
   ) {}
 
   get current(): ChildProcess | undefined {
@@ -79,21 +88,26 @@ export class ManagedProcess {
         this.disable();
         return;
       }
-      console.error(`[process] ${this.command} exited (${signal ?? code})`);
-      this.scheduleRestart();
+      const message = `[process] ${this.command} exited (${signal ?? code})`;
+      (this.restartPolicy.onWarn ?? console.error)(message);
+      if (this.enabled && !this.child) this.scheduleRestart();
     });
   }
 
   private scheduleRestart(): void {
     const now = performance.now();
-    this.restartTimes = this.restartTimes.filter((time) => now - time < RESTART_WINDOW_MS);
-    if (this.restartTimes.length >= MAX_RESTARTS) {
-      console.error(`[process] ${this.command} reached its restart limit`);
+    const windowMs = this.restartPolicy.windowMs ?? RESTART_WINDOW_MS;
+    const maxRestarts = this.restartPolicy.maxRestartsPerMinute ?? MAX_RESTARTS;
+    this.restartTimes = this.restartTimes.filter((time) => now - time < windowMs);
+    if (this.restartTimes.length >= maxRestarts) {
       this.disable();
+      const message = `[process] ${this.command} reached its restart limit`;
+      (this.restartPolicy.onFatal ?? console.error)(message);
       return;
     }
 
-    const delay = RESTART_DELAYS_MS[this.restartTimes.length] ?? RESTART_DELAYS_MS[2];
+    const backoff = this.restartPolicy.backoffMs ?? RESTART_DELAYS_MS;
+    const delay = backoff[this.restartTimes.length] ?? backoff.at(-1) ?? RESTART_DELAYS_MS[2];
     this.restartTimer = setTimeout(() => {
       this.restartTimer = undefined;
       this.restartTimes.push(performance.now());
