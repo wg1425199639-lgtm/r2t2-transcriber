@@ -45,7 +45,7 @@
 - 目标：按契约解析参数，退出码规范；`--list-devices` 输出 JSON。
 - 验收：`cd capture/mac && swift build -c release && .build/release/capture-mac --list-devices | python3 -c "import sys,json;json.load(sys.stdin)['devices']"`
 
-**M1-02 [Sol] 重采样器（含单测）**
+- [x] **M1-02 [Sol] 重采样器（含单测）**
 - 范围：`Sources/capture-mac/Resampler.swift`、`Tests/capture-macTests/ResamplerTests.swift`
 - 目标：48k F32 stereo → 16k mono s16le；正弦波输入输出频率/幅度正确，无削波。
 - 验收：`cd capture/mac && swift test`
