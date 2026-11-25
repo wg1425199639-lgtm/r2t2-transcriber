@@ -75,7 +75,7 @@
 ---
 ## Milestone 2 — 调度服务 + R2T2 适配层
 
-**M2-01 [Sol] 项目骨架 + config + protocol**
+- [x] **M2-01 [Sol] 项目骨架 + config + protocol**
 - 范围：`scheduler/package.json`、`tsconfig.json`、`src/config.ts`、`src/protocol.ts`（4 文件内合并创建）
 - 目标：strict TS；常量按 ARCHITECTURE §2.1；zod 定义 §3.2 全部消息。
 - 验收：`cd scheduler && npm i && npx tsc --noEmit`
