@@ -145,7 +145,7 @@
 - 目标：按 DESIGN §4；用户上滚立即解锁，显示"回到最新"胶囊；新文本不产生布局跳动。
 - 验收：`cd app && npx vitest run src/hooks/useStickyScroll.test.ts && npm run build`
 
-**M3-04 [Sol] 侧边栏热词管理**
+- [x] **M3-04 [Sol] 侧边栏热词管理**
 - 范围：`components/Sidebar.tsx`、`components/HotwordEditor.tsx`
 - 目标：热词 chip 增删、背景词多行输入、变更发 `hotwords.set`，显示"自第 N 段起生效"。
 - 验收：`cd app && npm run build && npx vitest run src/components/HotwordEditor.test.tsx`
