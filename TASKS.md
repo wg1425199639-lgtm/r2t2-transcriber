@@ -196,3 +196,36 @@
 - 验收：`bash scripts/package-mac.sh && test -d app/src-tauri/target/release/bundle/macos/*.app`
 
 **M4-06 [人工] 3 小时终验**：在 `.app` 中连续跑 3 小时发布会回放，导出 md/txt。验收：`bash scripts/soak.sh 10800`（断连=0、峰值 RSS 平稳、无 `error`）。
+
+---
+## Milestone 5 — v0.2 穿透悬浮字幕 · OBS 同源 · 原声点读 · 金句打点
+
+**M5-01 [Sol] 悬浮字幕视图 `CaptionOverlay` + 单测**
+- 范围：`app/src/components/CaptionOverlay.tsx`、`app/src/components/CaptionOverlay.test.tsx`、`app/src/main.tsx`
+- 目标：`?view=overlay` 渲染广播级双行悬浮字幕胶囊（`DESIGN.md` §6.1：深色毛玻璃、双行限流、热词微亮、5s 无新字自动呼吸弱化至 `0.18` 透明度、支持 `?view=overlay&obs=1` 纯透明无外框模式）；`main.tsx` 按 URL query 路由至 `CaptionOverlay` 或 `App`。
+- 验收：`cd app && npx tsc --noEmit && npx vitest run src/components/CaptionOverlay.test.tsx && npm run build`
+
+**M5-02 [Sol] Tauri 透明置顶副窗口 + 鼠标穿透与 `⌘L` 接线**
+- 范围：`app/src-tauri/src/main.rs`、`app/src-tauri/capabilities/default.json`、`app/src/components/TopBar.tsx`、`app/src/App.tsx`
+- 目标：Rust 新增 `toggle_overlay_window`（动态创建/显隐 `overlay` 透明无边框置顶窗口 `760×116`）与 `set_overlay_click_through(enabled: bool)`（调用 `set_ignore_cursor_events`）；顶栏新增克制的「悬浮字幕 (`⌘L`)」与「穿透锁定」按钮并绑定 `⌘L` 快捷键，同时在 `index.html`/`global.css` 确保 overlay 模式下 `html/body` 透明。
+- 验收：`cd app && npx tsc --noEmit && npm run build && cd src-tauri && cargo check`
+
+**M5-03 [Sol] `⌘M` 重点金句打点 + Markdown 顶部速览导出**
+- 范围：`app/src/store/session.ts`、`app/src/components/Segment.tsx`、`app/src/App.tsx`、`app/src/lib/ws-client.test.ts`
+- 目标：支持按 `segmentId` 切换重点书签（`⌘M` 标记当前最新/活跃段落，或点击段落悬停 `Bookmark` 图标；已打点段左侧显示 `2px` `--accent` 细竖线）；导出 Markdown 时若有打点段落，顶部自动生成 `# 实时语音转写记录` + `## 重点打点速览`（含 `HH:MM:SS` 与摘要）再输出全文。
+- 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`
+
+**M5-04 [Sol] 会话原声自动缓存 + `/audio/latest.wav` 与 `/caption` 本地路由**
+- 范围：`scheduler/src/ws-server.ts`、`scheduler/src/main.ts`、`scheduler/src/audio-http.test.ts`
+- 目标：录制时将 `16kHz/Mono/s16le` 帧同步追加写入 `data/sessions/<sessionId>.pcm`（并在 `segment.start` 前或会话内以首个段起点对齐）；同一 loopback `47800` HTTP 服务新增 `GET /audio/latest.wav`（动态合成 44B WAV 头 + 支持 `Range: bytes=...` `206` 随机寻址，录制中与结束后均可播）以及 `GET /caption`（零配置 OBS 透明双行字幕页，复用本地 `/ws`）。
+- 验收：`cd scheduler && npx tsc --noEmit && npx vitest run src/audio-http.test.ts`
+
+**M5-05 [Sol] 点击时间戳原声点读（Click-to-Play）**
+- 范围：`app/src/hooks/useAudioPreview.ts`、`app/src/components/Segment.tsx`、`app/src/App.tsx`
+- 目标：点击任意段落左侧 `HH:MM:SS` 时间戳，计算该段相对本轮首段的秒数偏移，通过 `<audio>` 加载 `http://127.0.0.1:47800/audio/latest.wav` 跳转到对应秒数播放原声（播放该段期间时间戳高亮 `--accent` 并显示播放态，再次点击或播完该段时长自动暂停）。
+- 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`
+
+**M5-06 [Sol] 全量测试回归与重新打包 Release `.app`**
+- 范围：`scripts/package-mac.sh`（如需适配，否则零改动直接执行验收）
+- 目标：跑通 Swift + Scheduler + App 全部单测，重新构建包含 v0.2 全部新特性的 `R2T2 Transcriber.app` 并清理多余 debug 包。
+- 验收：`bash scripts/package-mac.sh && test -d "app/src-tauri/target/release/bundle/macos/R2T2 Transcriber.app"`

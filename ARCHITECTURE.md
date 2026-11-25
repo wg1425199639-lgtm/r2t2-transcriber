@@ -116,7 +116,9 @@ capture-mac --list-devices        # stdout 输出一行 JSON 后退出
 
 ### 3.2 前端 ↔ 调度层 WebSocket
 
-`ws://127.0.0.1:47800/ws`，仅绑定 loopback，文本 JSON，每条含 `type`；协议版本 `v:1`。
+`ws://127.0.0.1:47800/ws`，仅绑定 loopback，文本 JSON，每条含 `type`；协议版本 `v:1`。同一本地 HTTP Server 同时暴露只读辅助路由：
+- `GET http://127.0.0.1:47800/audio/latest.wav`：动态封装 44 字节 `16kHz/1ch/s16le` WAV 头并支持 `Range: bytes=...`（`206 Partial Content`），供主界面点击时间戳原声点读（录制中与结束后均可用）。
+- `GET http://127.0.0.1:47800/caption`：纯透明背景只读字幕 HTML 页（连同一本地 `/ws`），供 OBS Browser Source 直接叠加直播画面。
 
 客户端 → 服务端：
 
