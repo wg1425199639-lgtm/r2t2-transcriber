@@ -90,7 +90,7 @@
 - 目标：帧 → rmsDb/peakDb；静音 `-120`，满幅 `0`。
 - 验收：`cd scheduler && npx vitest run src/level-meter.test.ts`
 
-**M2-04 [Sol] Silero VAD 推理封装**
+- [x] **M2-04 [Sol] Silero VAD 推理封装**
 - 范围：`src/vad/silero.ts`、`src/vad/silero.test.ts`
 - 目标：onnxruntime-node 加载 `models/silero_vad.onnx`，按 512 样本窗输出 prob，维护 state；测试用 fixtures wav 与全零数据。
 - 验收：`cd scheduler && npx vitest run src/vad/silero.test.ts`
