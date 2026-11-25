@@ -75,29 +75,27 @@ export function LevelMeter({ level, connectionStatus, sessionState, startedAtMs 
         aria-valuemin={0}
         aria-valuemax={BAR_COUNT}
         aria-valuenow={hasCurrentLevel ? (clipping ? BAR_COUNT : bars) : 0}
-        className="flex gap-0.5"
+        className={`flex shrink-0 gap-0.5 whitespace-nowrap${silent ? " opacity-60" : ""}`}
       >
         {Array.from({ length: BAR_COUNT }, (_, index) => {
           const upperDb = MIN_DB + (index + 1) * (-MIN_DB / BAR_COUNT);
-          let color = "var(--border)";
+          let color = "bg-[var(--border)]";
           if (clipping && index === BAR_COUNT - 1) {
-            color = "var(--danger)";
-          } else if (silent) {
-            color = "var(--warn)";
+            color = "bg-[var(--danger)]";
           } else if (hasCurrentLevel && index < bars) {
-            color = aboveWarning && upperDb > WARNING_DB ? "var(--warn)" : "var(--ok)";
+            color = aboveWarning && upperDb > WARNING_DB ? "bg-[var(--warn)]" : "bg-[var(--ok)]";
           }
-          return <span key={index} aria-hidden="true" className="h-[8px] w-1.5 rounded-[2px]" style={{ backgroundColor: color }} />;
+          return <span key={index} aria-hidden="true" className={`h-[8px] w-1.5 rounded-[2px] ${color}`} />;
         })}
       </div>
-      <span role="status" className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+      <span role="status" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs">
         {interrupted && (
           <>
             <span aria-hidden="true" className="size-2 rounded-full bg-[var(--danger)]" />
             <span className="text-[var(--text-2)]">采集中断，重连中</span>
           </>
         )}
-        {silent && <span className="text-[var(--text-2)]">未收到声音</span>}
+        {silent && <span className="hidden shrink-0 whitespace-nowrap text-[var(--warn)] @[44rem]:inline">未收到声音</span>}
       </span>
     </div>
   );

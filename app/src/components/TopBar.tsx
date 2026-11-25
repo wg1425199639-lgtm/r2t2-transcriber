@@ -71,7 +71,7 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
   }, [onToggleSidebar, toggleRecording]);
 
   return (
-    <header className={`flex h-12 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] pr-3 ${sidebarCollapsed ? "pl-[78px]" : "pl-3"}`}>
+    <header className={`@container flex h-11 shrink-0 select-none items-center gap-3 border-b border-[var(--border)] bg-[var(--bg)] pr-3 ${sidebarCollapsed ? "pl-[84px]" : "pl-3"}`}>
       <Button
         variant="ghost"
         size="icon"
@@ -91,7 +91,7 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
       />
       <div aria-hidden="true" className="h-full min-w-4 flex-1" data-tauri-drag-region />
       {stoppingAction && (
-        <div aria-label="录制时长" className="flex shrink-0 items-center gap-2 font-mono text-sm tabular-nums text-[var(--text-2)]">
+        <div aria-label="录制时长" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-sm tabular-nums text-[var(--text-2)]">
           <span aria-hidden="true" className="size-2 rounded-full bg-[var(--danger)]" />
           {formatElapsed(elapsedSeconds)}
         </div>
@@ -99,7 +99,7 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
       <Button
         size="sm"
         variant={stoppingAction ? "outline" : "default"}
-        className={stoppingAction ? "min-w-16" : "min-w-16 bg-[var(--accent)] text-white enabled:hover:bg-[var(--accent)] enabled:hover:opacity-90"}
+        className={`min-w-16 shrink-0 whitespace-nowrap${stoppingAction ? "" : " bg-[var(--accent)] text-white enabled:hover:bg-[var(--accent)] enabled:hover:opacity-90"}`}
         title={stoppingAction ? "停止 (⌘R)" : "开始 (⌘R)"}
         aria-keyshortcuts="Meta+R"
         onClick={toggleRecording}

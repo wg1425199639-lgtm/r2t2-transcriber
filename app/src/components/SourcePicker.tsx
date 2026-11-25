@@ -26,11 +26,13 @@ export function SourcePicker({ devices, value, onChange, disabled }: SourcePicke
   const selectedIndex = value.deviceId === undefined
     ? options.findIndex(({ selection }) => selection.source === value.source)
     : exactIndex;
+  const fallbackLabel = value.source === "system" ? "系统音频" : "麦克风";
 
   return (
-    <div className="relative min-w-0 max-w-52">
+    <div className="relative min-w-[140px] max-w-[220px] shrink truncate">
       <select
         aria-label="音源"
+        title={devices[selectedIndex]?.name ?? fallbackLabel}
         value={selectedIndex < 0 ? "current" : selectedIndex}
         disabled={disabled}
         onChange={(event) => {
@@ -41,7 +43,7 @@ export function SourcePicker({ devices, value, onChange, disabled }: SourcePicke
       >
         {selectedIndex < 0 && (
           <option value="current" disabled>
-            {value.source === "system" ? "系统音频" : "麦克风"}
+            {fallbackLabel}
           </option>
         )}
         {options.map(({ selection, label }, index) => (
