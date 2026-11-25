@@ -99,7 +99,24 @@ do {
     case .capture(let options):
         switch options.source {
         case .system:
-            fail("NOT_IMPLEMENTED", "Capture for source system is not implemented", status: 5)
+            let capture = SCKCapture(frameBytes: options.frameDuration.bytes) { error in
+                guard let error else { exit(0) }
+                switch error {
+                case SCKCapture.CaptureError.permissionDenied:
+                    fail("PERM_DENIED", error.localizedDescription, status: 3)
+                case SCKCapture.CaptureError.deviceUnavailable:
+                    fail("DEVICE_UNAVAILABLE", error.localizedDescription, status: 4)
+                default:
+                    fail("INTERNAL_ERROR", error.localizedDescription, status: 5)
+                }
+            }
+            capture.start(dumpPath: options.dumpWAVPath) {
+                try? writeJSONLine(
+                    CaptureLog(lvl: "info", code: "READY", msg: "system audio capture started"),
+                    to: .standardError
+                )
+            }
+            dispatchMain()
         case .mic:
             let capture = MicCapture(frameBytes: options.frameDuration.bytes)
             try capture.start(deviceUID: options.deviceID, dumpPath: options.dumpWAVPath) { error in

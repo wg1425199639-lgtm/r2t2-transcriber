@@ -60,7 +60,7 @@
 - 目标：AVAudioEngine 采集，按 `--device-id`，经重采样输出到 stdout，`--dump-wav` 生效，READY/PERM_DENIED 走 stderr JSON。
 - 验收：`cd capture/mac && swift build -c release && .build/release/capture-mac --source mic --dump-wav /tmp/mic.wav 2>/tmp/mic.err & sleep 5; kill -TERM $!; sleep 1; ffprobe -v error -show_entries stream=sample_rate,channels,duration -of csv=p=0 /tmp/mic.wav`（应 `16000,1,≈5`）
 
-**M1-05 [Sol] ScreenCaptureKit 系统内录**
+- [x] **M1-05 [Sol] ScreenCaptureKit 系统内录**
 - 范围：`Sources/capture-mac/SCKCapture.swift`、`main.swift`
 - 目标：`--source system` 仅音频流（排除自身），经重采样输出。
 - 验收：同 M1-04，将 `--source mic` 换为 `--source system` 并输出 `/tmp/sys.wav`（须先播放音频）
