@@ -110,7 +110,7 @@
 - 目标：严格遵守 `docs/r2t2-reference.md` §3.3~§3.4：启动 `audiocpp_server --config <server.json> --no-ui` 并轮询 `GET /health`；`openSession` 必须用 `node:http`（禁 `fetch`/`undici`/`axios`）调 `POST /v1/audio/transcriptions/live`（显式 `Transfer-Encoding: chunked`，禁 `Content-Length` 与 `Expect: 100-continue`，立即 `req.flushHeaders()`，socket `setNoDelay(true)` + `setTimeout(0)`，`prompt` 去换行且编码前 `<= 250` 字符）；`StringDecoder('utf8')` 按 `\r?\n\r?\n` 切 SSE 帧；`done` 按前缀/LCP 补齐未提交尾字；`finish()` 发送终止块 `0\r\n\r\n`（`req.end()`）并保证单槽位互斥；崩溃退避重启。
 - 验收：`cd scheduler && npx tsx src/asr/r2t2-adapter.smoke.ts ../fixtures/news01.wav | tail -5`（打印中文转写）
 
-**M2-08 [Sol] 热词持久化 + transcript-log**
+- [x] **M2-08 [Sol] 热词持久化 + transcript-log**
 - 范围：`src/hotwords-store.ts`、`src/transcript-log.ts`、`src/hotwords-store.test.ts`
 - 目标：JSON 原子写；改动后下一次 `get()` 立即为新值；jsonl 追加。
 - 验收：`cd scheduler && npx vitest run src/hotwords-store.test.ts`
