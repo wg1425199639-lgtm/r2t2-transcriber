@@ -155,7 +155,7 @@
 - 目标：设备列表来自 `devices`；电平 60fps 平滑、静音超 3s 显示"未收到声音"。
 - 验收：`cd app && npm run build`
 
-**M3-06 [Sol] 主界面组装 + 命中热词高亮 + 时间戳**
+- [x] **M3-06 [Sol] 主界面组装 + 命中热词高亮 + 时间戳**
 - 范围：`app/src/App.tsx`、`components/Segment.tsx`、`lib/highlight.ts`
 - 目标：按 DESIGN 排版；命中热词克制高亮；段首时间戳。
 - 验收：`cd app && npx vitest run src/lib/highlight.test.ts && npm run build`
