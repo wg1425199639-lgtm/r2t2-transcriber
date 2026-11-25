@@ -67,7 +67,7 @@
 
 **M1-06 [人工] 听音验收**：播放新闻视频 + 对麦克风说话，各录 10s，听 `/tmp/sys.wav`、`/tmp/mic.wav` 无爆音/变速/变调。验收：`afplay /tmp/sys.wav`；并执行 `capture/mac/.build/release/capture-mac --source system 2>/dev/null | head -c 320000 | wc -c` 得 `320000`（=10s）
 
-**M1-07 [Sol] stdout 纯净性测试脚本**
+- [x] **M1-07 [Sol] stdout 纯净性测试脚本**
 - 范围：`scripts/e2e-capture-pure.sh`
 - 目标：运行 5s，断言 stdout 字节数为 `10240` 的整数倍且 ≈ `160000±10%`，stderr 全为合法 JSON 行。
 - 验收：`bash scripts/e2e-capture-pure.sh`
