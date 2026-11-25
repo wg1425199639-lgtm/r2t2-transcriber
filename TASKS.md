@@ -50,7 +50,7 @@
 - 目标：48k F32 stereo → 16k mono s16le；正弦波输入输出频率/幅度正确，无削波。
 - 验收：`cd capture/mac && swift test`
 
-**M1-03 [Sol] WAV 落盘器**
+- [x] **M1-03 [Sol] WAV 落盘器**
 - 范围：`Sources/capture-mac/WavDump.swift`、`Tests/capture-macTests/WavDumpTests.swift`
 - 目标：流式写 WAV，关闭时回填头；SIGTERM 安全。
 - 验收：`cd capture/mac && swift test --filter WavDumpTests`
