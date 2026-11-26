@@ -22,8 +22,10 @@
   }
 
   html[data-overlay="true"],
-  html[data-overlay="true"] body {
-    background-color: transparent;
+  html[data-overlay="true"] body,
+  html[data-overlay="true"] #root {
+    background: transparent !important;
+    background-color: transparent !important;
   }
 
   ::selection {

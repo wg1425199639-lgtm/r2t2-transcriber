@@ -221,12 +221,15 @@ fn toggle_overlay_window(
 ) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("overlay") {
         let show = visible.unwrap_or_else(|| !window.is_visible().unwrap_or(false));
+        if let Some(enabled) = click_through {
+            window
+                .set_ignore_cursor_events(enabled)
+                .map_err(|error| error.to_string())?;
+            let _ = window.eval(format!(
+                "window.dispatchEvent(new CustomEvent('overlay-lock', {{ detail: {enabled} }}));"
+            ));
+        }
         if show {
-            if let Some(enabled) = click_through {
-                window
-                    .set_ignore_cursor_events(enabled)
-                    .map_err(|error| error.to_string())?;
-            }
             window.show().map_err(|error| error.to_string())?;
         } else {
             window.hide().map_err(|error| error.to_string())?;
@@ -240,15 +243,19 @@ fn toggle_overlay_window(
     const WIDTH: f64 = 760.0;
     const HEIGHT: f64 = 116.0;
     const BOTTOM_MARGIN: f64 = 64.0;
+    let locked = click_through.unwrap_or(true);
     let builder = tauri::WebviewWindowBuilder::new(
         &app,
         "overlay",
-        tauri::WebviewUrl::App("index.html?view=overlay".into()),
+        tauri::WebviewUrl::App(
+            format!("index.html?view=overlay&locked={}", if locked { "1" } else { "0" }).into(),
+        ),
     )
     .inner_size(WIDTH, HEIGHT)
     .resizable(false)
     .decorations(false)
     .transparent(true)
+    .background_color(tauri::window::Color(0, 0, 0, 0))
     .always_on_top(true)
     .skip_taskbar(true)
     .focused(false)
@@ -269,8 +276,9 @@ fn toggle_overlay_window(
         _ => builder.center(),
     };
     let window = builder.build().map_err(|error| error.to_string())?;
+    let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
     window
-        .set_ignore_cursor_events(click_through.unwrap_or(true))
+        .set_ignore_cursor_events(locked)
         .and_then(|()| window.show())
         .map_err(|error| error.to_string())?;
     Ok(true)
@@ -282,6 +290,9 @@ fn set_overlay_click_through(app: tauri::AppHandle, enabled: bool) -> Result<(),
         window
             .set_ignore_cursor_events(enabled)
             .map_err(|error| error.to_string())?;
+        let _ = window.eval(format!(
+            "window.dispatchEvent(new CustomEvent('overlay-lock', {{ detail: {enabled} }}));"
+        ));
     }
     Ok(())
 }
