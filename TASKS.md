@@ -225,7 +225,7 @@
 - 目标：点击任意段落左侧 `HH:MM:SS` 时间戳，计算该段相对本轮首段的秒数偏移，通过 `<audio>` 加载 `http://127.0.0.1:47800/audio/latest.wav` 跳转到对应秒数播放原声（播放该段期间时间戳高亮 `--accent` 并显示播放态，再次点击或播完该段时长自动暂停）。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`
 
-**M5-06 [Sol] 全量测试回归与重新打包 Release `.app`**
+- [x] **M5-06 [Sol] 全量测试回归与重新打包 Release `.app`**
 - 范围：`scripts/package-mac.sh`（如需适配，否则零改动直接执行验收）
 - 目标：跑通 Swift + Scheduler + App 全部单测，重新构建包含 v0.2 全部新特性的 `R2T2 Transcriber.app` 并清理多余 debug 包。
 - 验收：`bash scripts/package-mac.sh && test -d "app/src-tauri/target/release/bundle/macos/R2T2 Transcriber.app"`
