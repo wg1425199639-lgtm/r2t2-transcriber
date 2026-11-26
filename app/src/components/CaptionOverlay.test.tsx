@@ -101,7 +101,7 @@ describe("CaptionOverlay", () => {
     expect(caption().textContent).toBe("推动新质");
 
     act(() => delta("生产力。", 2));
-    expect(caption().textContent).toBe("推动新质生产力。");
+    expect(caption().textContent).toBe("推动新质生产力");
     const hit = screen.getByText("新质生产力");
     expect(hit.getAttribute("data-hotword-hit")).toBe("true");
     expect(hit.style.backgroundColor).toBe("rgba(91, 141, 239, 0.34)");
@@ -109,28 +109,48 @@ describe("CaptionOverlay", () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the newest tail as a long segment grows and the next one begins", () => {
+  it("keeps a completed clause until the first text of the next clause arrives", () => {
     render(<CaptionOverlay store={store} />);
-    const firstTail = "这是当前段落的末尾。";
-    const nextTail = "现在公布最新结果。";
     act(() => {
       start();
-      delta("段首说明。" + "这是一段很长的转写。".repeat(15) + firstTail);
+      delta("国务院新闻办公室今天举行新闻发布会，");
     });
-    expect(caption().textContent).toHaveLength(60);
-    expect(caption().textContent).toMatch(new RegExp(`${firstTail}$`));
-    expect(caption().textContent).not.toContain("段首说明");
-
-    act(() => delta(nextTail, 2));
-    expect(caption().textContent?.endsWith(nextTail)).toBe(true);
-    act(() => start(2));
-    expect(caption().textContent?.endsWith(nextTail)).toBe(true);
-    act(() => delta("请继续。", 1, 2));
-    expect(caption().textContent?.endsWith(`${nextTail} 请继续。`)).toBe(true);
-    expect(caption().textContent).toHaveLength(60);
+    expect(caption().textContent).toBe("国务院新闻办公室今天举行新闻发布会");
+    act(() => delta("国家发展改革委介绍情况。", 2));
+    expect(caption().textContent).toBe("国家发展改革委介绍情况");
+    act(() => delta("增长9.6%，", 3));
+    expect(caption().textContent).toBe("增长9.6%");
+    act(() => delta("稳中有进", 4));
+    expect(caption().textContent).toBe("稳中有进");
+    act(() => delta("\n约1,000人（含记者）、…", 5));
+    expect(caption().textContent).toBe("约1,000人（含记者）");
   });
 
-  it("hides the ready hint and silent captions, and wakes even if the visible tail repeats", () => {
+  it("keeps the last 28 Unicode code points of a long clause", () => {
+    render(<CaptionOverlay store={store} />);
+    const tail = "𠮷" + "字".repeat(27);
+    act(() => {
+      start();
+      delta("这里是超长分句的开头" + tail);
+    });
+    expect(caption().textContent).toBe(tail);
+  });
+
+  it("holds the previous clause through an empty segment and switches on the first new text", () => {
+    render(<CaptionOverlay store={store} />);
+    act(() => {
+      start();
+      delta("这是旧段的开头。现在公布最新结果。");
+    });
+    act(() => start(2));
+    expect(caption().textContent).toBe("现在公布最新结果");
+    act(() => delta("  ", 1, 2));
+    expect(caption().textContent).toBe("现在公布最新结果");
+    act(() => delta("请", 2, 2));
+    expect(caption().textContent).toBe("请");
+  });
+
+  it("hides the ready hint and resets silence on trailing punctuation", () => {
     vi.useFakeTimers();
     render(<CaptionOverlay store={store} />);
     expect(caption().textContent).toBe("字幕已就绪");
@@ -141,17 +161,19 @@ describe("CaptionOverlay", () => {
 
     act(() => {
       start();
-      delta("继续讲话".repeat(20));
+      delta("继续讲话");
     });
     expect(caption().style.opacity).toBe("1");
     expect(caption().style.transition).toBe("opacity 120ms ease-out");
-    const visibleTail = caption().textContent;
+    act(() => vi.advanceTimersByTime(4_999));
+    act(() => delta("。", 2));
+    expect(caption().textContent).toBe("继续讲话");
     act(() => vi.advanceTimersByTime(4_999));
     expect(caption().style.opacity).toBe("1");
     act(() => vi.advanceTimersByTime(1));
     expect(caption().style.opacity).toBe("0");
-    act(() => delta("继续讲话", 2));
-    expect(caption().textContent).toBe(visibleTail);
+    act(() => delta("！", 3));
+    expect(caption().textContent).toBe("继续讲话");
     expect(caption().style.opacity).toBe("1");
   });
 
@@ -168,7 +190,7 @@ describe("CaptionOverlay", () => {
       start();
       delta("直播字幕。");
     });
-    expect(caption().textContent).toBe("直播字幕。");
+    expect(caption().textContent).toBe("直播字幕");
     expect(caption().style.opacity).toBe("1");
     act(() => vi.advanceTimersByTime(5_001));
     expect(caption().style.opacity).toBe("0");

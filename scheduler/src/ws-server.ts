@@ -333,7 +333,8 @@ const CAPTION_HTML = `<!doctype html>
 <div id="caption"></div>
 <script>
   const caption = document.getElementById("caption");
-  let tail = "";
+  const MAX_CLAUSE_CHARS = 28;
+  let segmentText = "";
   let segment;
   let renderedSegment;
   let sequence = 0;
@@ -346,15 +347,18 @@ const CAPTION_HTML = `<!doctype html>
   let stopped = false;
 
   function render() {
+    const clauses = segmentText.split(/[，。！？；：!?;\\n]+|,(?!\\d)/u).map((part) => part.trim()).filter(Boolean);
+    const latestClause = (clauses.at(-1) ?? "").replace(/[，,。！？!?；;：:、…]+$/u, "").trimEnd();
+    const clause = Array.from(latestClause).slice(-MAX_CLAUSE_CHARS).join("");
     const nodes = document.createDocumentFragment();
     let plainStart = 0;
-    for (let i = 0; i < tail.length;) {
-      const word = hotwords.find((word) => tail.startsWith(word, i));
+    for (let i = 0; i < clause.length;) {
+      const word = hotwords.find((word) => clause.startsWith(word, i));
       if (!word) {
         i++;
         continue;
       }
-      nodes.append(document.createTextNode(tail.slice(plainStart, i)));
+      nodes.append(document.createTextNode(clause.slice(plainStart, i)));
       const hit = document.createElement("span");
       hit.className = "hit";
       hit.textContent = word;
@@ -362,7 +366,7 @@ const CAPTION_HTML = `<!doctype html>
       i += word.length;
       plainStart = i;
     }
-    nodes.append(document.createTextNode(tail.slice(plainStart)));
+    nodes.append(document.createTextNode(clause.slice(plainStart)));
     caption.replaceChildren(nodes);
     caption.scrollTop = caption.scrollHeight;
   }
@@ -384,7 +388,7 @@ const CAPTION_HTML = `<!doctype html>
     socket.addEventListener("message", ({ data }) => {
       const message = JSON.parse(data);
       if (message.type === "state" && message.state === "starting") {
-        tail = "";
+        segmentText = "";
         segment = renderedSegment = lastDelta = undefined;
         render();
       } else if (message.type === "hotwords") {
@@ -400,9 +404,12 @@ const CAPTION_HTML = `<!doctype html>
         if (message.seq <= sequence) return;
         lastDelta = message;
         sequence = message.seq;
-        const separator = tail && renderedSegment !== segment ? " " : "";
-        tail = Array.from(tail + separator + message.text).slice(-60).join("");
-        renderedSegment = segment;
+        if (renderedSegment !== segment) {
+          if (!message.text.trim()) return;
+          segmentText = "";
+          renderedSegment = segment;
+        }
+        segmentText += message.text;
         render();
         caption.classList.add("visible");
         clearTimeout(hideTimer);

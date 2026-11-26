@@ -10,32 +10,23 @@ interface CaptionOverlayProps {
   initialLocked?: boolean;
 }
 
-const MAX_CAPTION_CHARS = 60;
-const SHORT_SEGMENT_CHARS = 24;
+const MAX_CLAUSE_CHARS = 28;
 const SILENCE_MS = 5_000;
 const READY_HINT_MS = 2_500;
 
 function getCaption(segments: TranscriptSegment[]) {
-  let latest: TranscriptSegment | undefined;
-  let tail = "";
   for (let index = segments.length - 1; index >= 0; index--) {
-    const segment = segments[index];
-    const text = segment.text.trim();
+    const latest = segments[index];
+    const text = latest.text.trim();
     if (!text) continue;
 
-    const suffix = text.slice(-2 * MAX_CAPTION_CHARS);
-    if (latest) {
-      tail = `${suffix} ${tail}`;
-      break;
-    }
-
-    latest = segment;
-    tail = suffix;
-    if (text.length >= SHORT_SEGMENT_CHARS) break;
+    const clauses = text.split(/[，。！？；：!?;\n]+|,(?!\d)/u).map((part) => part.trim()).filter(Boolean);
+    const clause = (clauses.at(-1) ?? "").replace(/[，,。！？!?；;：:、…]+$/u, "").trimEnd();
+    const displayText = Array.from(clause).slice(-MAX_CLAUSE_CHARS).join("");
+    return { latest, displayText };
   }
 
-  const displayText = Array.from(tail).slice(-MAX_CAPTION_CHARS).join("").trimStart();
-  return { latest, displayText };
+  return { latest: undefined, displayText: "" };
 }
 
 export function CaptionOverlay({
