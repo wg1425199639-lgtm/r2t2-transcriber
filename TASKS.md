@@ -215,7 +215,7 @@
 - 目标：支持按 `segmentId` 切换重点书签（`⌘M` 标记当前最新/活跃段落，或点击段落悬停 `Bookmark` 图标；已打点段左侧显示 `2px` `--accent` 细竖线）；导出 Markdown 时若有打点段落，顶部自动生成 `# 实时语音转写记录` + `## 重点打点速览`（含 `HH:MM:SS` 与摘要）再输出全文。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`
 
-**M5-04 [Sol] 会话原声自动缓存 + `/audio/latest.wav` 与 `/caption` 本地路由**
+- [x] **M5-04 [Sol] 会话原声自动缓存 + `/audio/latest.wav` 与 `/caption` 本地路由**
 - 范围：`scheduler/src/ws-server.ts`、`scheduler/src/main.ts`、`scheduler/src/audio-http.test.ts`
 - 目标：录制时将 `16kHz/Mono/s16le` 帧同步追加写入 `data/sessions/<sessionId>.pcm`（并在 `segment.start` 前或会话内以首个段起点对齐）；同一 loopback `47800` HTTP 服务新增 `GET /audio/latest.wav`（动态合成 44B WAV 头 + 支持 `Range: bytes=...` `206` 随机寻址，录制中与结束后均可播）以及 `GET /caption`（零配置 OBS 透明双行字幕页，复用本地 `/ws`）。
 - 验收：`cd scheduler && npx tsc --noEmit && npx vitest run src/audio-http.test.ts`

@@ -1,6 +1,6 @@
 import { execFile, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { open, type FileHandle } from "node:fs/promises";
+import { mkdir, open, rename, writeFile, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
@@ -152,10 +152,19 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+interface AudioSegment {
+  segmentId: number;
+  startedAtMs: number;
+  offsetSec: number;
+  durMs?: number;
+}
+
 interface ActiveSegment {
   id: number;
   session: AsrSession;
   openedAt: number;
+  offsetSec: number;
+  audioIndex?: AudioSegment;
   nextSeq: number;
   audioBytes: number;
   failed: boolean;
@@ -166,6 +175,13 @@ class Recording {
   private readonly segmenter = new Segmenter();
   readonly sessionId = randomUUID();
   readonly log = new TranscriptLog(this.sessionId);
+  private readonly sessionsDir = join(DATA_DIR, "sessions");
+  private readonly audioIndex = { sessionId: this.sessionId, audioStartedAtMs: 0, segments: [] as AudioSegment[] };
+  private pcm?: FileHandle;
+  private pcmBytesWritten = 0;
+  private pcmFailed = false;
+  private audioIndexDirty = false;
+  private audioIndexWrite?: Promise<void>;
   private readonly pending: Buffer[] = [];
   private readonly frameBytes: number;
   private readonly pendingCapacity: number;
@@ -206,13 +222,15 @@ class Recording {
       this.vad = await SileroVad.create();
       if (!signal.aborted) await this.startEngine();
       if (!signal.aborted) {
+        await this.openAudioCache();
+        signal.throwIfAborted();
         if (source.kind === "file") await this.readFile(source);
         else await this.readCapture(source);
       }
     } catch (error) {
       if (!signal.aborted) this.fail(error);
     } finally {
-      await this.capture?.stop();
+      await this.capture?.stop().catch((error: unknown) => this.fail(error));
       await this.draining;
       try {
         await this.execute(this.segmenter.stop());
@@ -224,6 +242,8 @@ class Recording {
         this.active = undefined;
       }
       const cleanup = await Promise.allSettled([
+        this.flushAudioIndex(),
+        this.pcm?.close(),
         this.log.close(),
         this.vad?.dispose(),
         this.adapter.stop(),
@@ -233,6 +253,55 @@ class Recording {
       }
     }
     if (this.failure) throw this.failure;
+  }
+
+  private async openAudioCache(): Promise<void> {
+    try {
+      await mkdir(this.sessionsDir, { recursive: true });
+      this.pcm = await open(join(this.sessionsDir, `${this.sessionId}.pcm`), "a");
+    } catch (error) {
+      this.warn("AUDIO_CACHE", errorText(error));
+    }
+  }
+
+  private async cacheFrame(frame: Buffer): Promise<void> {
+    if (!this.pcm || this.pcmFailed) return;
+    try {
+      let offset = 0;
+      while (offset < frame.length) {
+        const { bytesWritten } = await this.pcm.write(frame, offset, frame.length - offset);
+        if (bytesWritten === 0) throw new Error("PCM append made no progress");
+        offset += bytesWritten;
+        this.pcmBytesWritten += bytesWritten;
+      }
+    } catch (error) {
+      this.pcmFailed = true;
+      this.warn("AUDIO_CACHE", errorText(error));
+    }
+  }
+
+  private flushAudioIndex(): Promise<void> | undefined {
+    if (this.pcm && this.audioIndexDirty) {
+      this.audioIndexWrite ??= this.writeAudioIndex().finally(() => {
+        this.audioIndexWrite = undefined;
+      });
+    }
+    return this.audioIndexWrite;
+  }
+
+  private async writeAudioIndex(): Promise<void> {
+    const path = join(this.sessionsDir, `${this.sessionId}.audio.json`);
+    while (this.audioIndexDirty) {
+      this.audioIndexDirty = false;
+      try {
+        await writeFile(`${path}.tmp`, JSON.stringify(this.audioIndex));
+        await rename(`${path}.tmp`, path);
+      } catch (error) {
+        this.audioIndexDirty = true;
+        this.warn("AUDIO_INDEX", errorText(error));
+        return;
+      }
+    }
   }
 
   private async startEngine(): Promise<void> {
@@ -384,6 +453,12 @@ class Recording {
       if (!vad) throw new Error("VAD is unavailable");
       for (let frame = this.pending.shift(); frame && !this.failure; frame = this.pending.shift()) {
         if (!this.started) {
+          this.audioIndex.audioStartedAtMs = Date.now();
+          this.audioIndexDirty = true;
+        }
+        await this.cacheFrame(frame);
+        if (!this.started) {
+          await this.flushAudioIndex();
           this.started = true;
           this.updateState("running", this.vadState);
         }
@@ -394,7 +469,7 @@ class Recording {
         }
         const probabilities = await vad.processFrame(frame);
         if (this.active?.failed) this.resetFailedSegment();
-        await this.execute(this.segmenter.processFrame(frame, probabilities));
+        await this.execute(this.segmenter.processFrame(frame, probabilities), frame);
         this.setVad(this.segmenter.vadState);
         await this.log.flush();
       }
@@ -405,10 +480,15 @@ class Recording {
     }
   }
 
-  private async execute(actions: SegmenterAction[]): Promise<void> {
+  private async execute(actions: SegmenterAction[], frame?: Buffer): Promise<void> {
     for (const action of actions) {
       if (action.type === "OPEN") {
-        if (!await this.openSegment(action)) {
+        const firstPush = actions.find((candidate) => candidate.type === "PUSH" && candidate.segmentId === action.segmentId);
+        // The segmenter can start or rotate within a frame it has already cached.
+        const frameSuffixBytes = frame && firstPush?.type === "PUSH"
+          ? frame.byteOffset + frame.length - firstPush.pcm.byteOffset
+          : 0;
+        if (!await this.openSegment(action, frameSuffixBytes)) {
           this.resetFailedSegment();
           return;
         }
@@ -430,7 +510,12 @@ class Recording {
     }
   }
 
-  private async openSegment(action: Extract<SegmenterAction, { type: "OPEN" }>): Promise<boolean> {
+  private async openSegment(
+    action: Extract<SegmenterAction, { type: "OPEN" }>, frameSuffixBytes: number,
+  ): Promise<boolean> {
+    const prerollBytes = action.preroll.reduce((sum, buffer) => sum + buffer.length, 0);
+    const startByte = Math.max(0, this.pcmBytesWritten - prerollBytes - frameSuffixBytes);
+    const offsetSec = startByte / (SAMPLE_RATE * SAMPLE_BYTES);
     if (this.active) throw new Error("An ASR segment is already open");
     this.openedSegmentId = action.segmentId;
     const context = this.hotwords.toPromptContext();
@@ -442,7 +527,7 @@ class Recording {
       return false;
     }
     const segment: ActiveSegment = {
-      id: action.segmentId, session, openedAt: Date.now(), nextSeq: 1, audioBytes: 0, failed: false,
+      id: action.segmentId, session, openedAt: Date.now(), offsetSec, nextSeq: 1, audioBytes: 0, failed: false,
     };
     this.active = segment;
     session.onDelta((text) => {
@@ -504,12 +589,24 @@ class Recording {
 
   private closeSegment(segment: ActiveSegment, reason: FinishAction["reason"], durMs: number): void {
     this.ensureSegmentStart(segment, segment.openedAt);
+    if (segment.audioIndex) {
+      segment.audioIndex.durMs = durMs;
+      this.audioIndexDirty = true;
+      void this.flushAudioIndex();
+    }
     this.record({ type: "segment.end", segmentId: segment.id, reason, durMs });
     this.active = undefined;
   }
 
   private ensureSegmentStart(segment: ActiveSegment, tsMs: number): void {
-    if (segment.nextSeq === 1) this.record({ type: "segment.start", segmentId: segment.id, tsMs });
+    if (segment.nextSeq !== 1) return;
+    if (this.pcm && !this.pcmFailed) {
+      segment.audioIndex = { segmentId: segment.id, startedAtMs: tsMs, offsetSec: segment.offsetSec };
+      this.audioIndex.segments.push(segment.audioIndex);
+      this.audioIndexDirty = true;
+      void this.flushAudioIndex();
+    }
+    this.record({ type: "segment.start", segmentId: segment.id, tsMs });
   }
 
   private record(record: TranscriptLogRecord): void {
