@@ -4,6 +4,7 @@ import { formatTimestamp, Segment } from "./components/Segment";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { Transcript } from "./components/Transcript";
+import { segmentPreviewKey, useAudioPreview } from "./hooks/useAudioPreview";
 import { sessionStore, useSessionStore } from "./store/session";
 import type { TranscriptSegment } from "./store/session";
 
@@ -42,7 +43,8 @@ function downloadTranscript(format: "md" | "txt", text: string, defaultName: str
 }
 
 export function App() {
-  const { hotwords, segments } = useSessionStore();
+  const { hotwords, segments, sessionState } = useSessionStore();
+  const { playingKey, previewError, togglePlay, stopPreview } = useAudioPreview();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [fontIndex, setFontIndex] = useState(FONT_SIZES.indexOf(20));
   const [copyFailed, setCopyFailed] = useState(false);
@@ -115,9 +117,23 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (sessionState === "starting") stopPreview();
+  }, [sessionState, stopPreview]);
+
+  const handleTogglePlay = useCallback((segment: TranscriptSegment) => {
+    void togglePlay(segment, sessionStore.getSnapshot().segments);
+  }, [togglePlay]);
+
   const renderSegment = useCallback((segment: TranscriptSegment) => (
-    <Segment segment={segment} hotwords={hotwords} onToggleBookmark={sessionStore.toggleBookmark} />
-  ), [hotwords]);
+    <Segment
+      segment={segment}
+      hotwords={hotwords}
+      isPlaying={playingKey === segmentPreviewKey(segment)}
+      onTogglePlay={handleTogglePlay}
+      onToggleBookmark={sessionStore.toggleBookmark}
+    />
+  ), [hotwords, playingKey, handleTogglePlay]);
 
   const exportTranscript = useCallback(async (format: "md" | "txt") => {
     const text = formatExportContent(sessionStore.getSnapshot().segments, format);
@@ -220,6 +236,7 @@ export function App() {
         />
         <MemoTranscript segments={segments} fontSize={FONT_SIZES[fontIndex]} renderSegment={renderSegment} />
         {overlayNotice && <p role="status" className="px-6 py-2 text-sm text-[var(--text-2)]">{overlayNotice}</p>}
+        {previewError && <p role="status" className="px-6 py-2 text-sm text-[var(--text-2)]">{previewError}</p>}
         {copyFailed && <p role="status" className="px-6 py-2 text-sm text-[var(--text-2)]">复制失败，请重试。</p>}
       </main>
     </div>

@@ -1,4 +1,4 @@
-import { Bookmark } from "lucide-react";
+import { Bookmark, Play } from "lucide-react";
 import { Fragment, memo, useLayoutEffect, useMemo, useRef } from "react";
 import { splitByHotwords } from "../lib/highlight";
 import type { TranscriptSegment } from "../store/session";
@@ -6,6 +6,8 @@ import type { TranscriptSegment } from "../store/session";
 interface SegmentProps {
   segment: TranscriptSegment;
   hotwords: readonly string[];
+  isPlaying?: boolean;
+  onTogglePlay?: (segment: TranscriptSegment) => void;
   onToggleBookmark?: (segmentId: number, startedAtMs: number) => void;
 }
 
@@ -16,7 +18,7 @@ export function formatTimestamp(tsMs: number): string {
     .join(":");
 }
 
-export const Segment = memo(function Segment({ segment, hotwords, onToggleBookmark }: SegmentProps) {
+export const Segment = memo(function Segment({ segment, hotwords, isPlaying = false, onTogglePlay, onToggleBookmark }: SegmentProps) {
   const { active, bookmarked = false, segmentId, startedAtMs, text } = segment;
   const committed = useRef({ active: false, text: "", fadeFrom: 0, hotwords });
   const previous = committed.current;
@@ -25,6 +27,7 @@ export const Segment = memo(function Segment({ segment, hotwords, onToggleBookma
   const fadeFrom = text === previous.text ? previous.fadeFrom : isAppending ? previous.text.length : text.length;
   const parts = useMemo(() => splitByHotwords(text, highlightingWords), [text, highlightingWords]);
   const timestamp = formatTimestamp(startedAtMs);
+  const playLabel = isPlaying ? "停止原声回放" : "播放该段原声";
 
   useLayoutEffect(() => {
     committed.current = { active, text, fadeFrom, hotwords: highlightingWords };
@@ -34,12 +37,32 @@ export const Segment = memo(function Segment({ segment, hotwords, onToggleBookma
   return (
     <div className="group contents">
       <div className="relative col-start-1 justify-self-end self-start pr-3 text-[13px] font-mono leading-[1lh] tabular-nums select-none">
-        <time
-          dateTime={timestamp}
-          className="text-[var(--text-2)] opacity-60 group-hover:opacity-100 transition-opacity duration-150"
-        >
-          {timestamp}
-        </time>
+        {onTogglePlay ? (
+          <button
+            type="button"
+            aria-label={playLabel}
+            title={playLabel}
+            aria-pressed={isPlaying}
+            onClick={() => onTogglePlay(segment)}
+            className={`relative cursor-pointer rounded align-baseline transition-opacity duration-150 ${
+              isPlaying
+                ? "text-[var(--accent)] opacity-100"
+                : "text-[var(--text-2)] opacity-60 group-hover:opacity-100 hover:text-[var(--accent)] focus-visible:opacity-100"
+            }`}
+          >
+            <time dateTime={timestamp}>{timestamp}</time>
+            {isPlaying && (
+              <Play size={10} strokeWidth={1.5} aria-hidden="true" className="pointer-events-none absolute left-full top-1/2 ml-0.5 -translate-y-1/2" />
+            )}
+          </button>
+        ) : (
+          <time
+            dateTime={timestamp}
+            className="text-[var(--text-2)] opacity-60 group-hover:opacity-100 transition-opacity duration-150"
+          >
+            {timestamp}
+          </time>
+        )}
         {onToggleBookmark && (
           <button
             type="button"
@@ -83,5 +106,7 @@ export const Segment = memo(function Segment({ segment, hotwords, onToggleBookma
   );
 }, (previous, next) =>
   previous.segment === next.segment
+  && previous.isPlaying === next.isPlaying
+  && previous.onTogglePlay === next.onTogglePlay
   && previous.onToggleBookmark === next.onToggleBookmark
   && (!next.segment.active || previous.hotwords === next.hotwords));

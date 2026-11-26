@@ -220,7 +220,7 @@
 - 目标：录制时将 `16kHz/Mono/s16le` 帧同步追加写入 `data/sessions/<sessionId>.pcm`（并在 `segment.start` 前或会话内以首个段起点对齐）；同一 loopback `47800` HTTP 服务新增 `GET /audio/latest.wav`（动态合成 44B WAV 头 + 支持 `Range: bytes=...` `206` 随机寻址，录制中与结束后均可播）以及 `GET /caption`（零配置 OBS 透明双行字幕页，复用本地 `/ws`）。
 - 验收：`cd scheduler && npx tsc --noEmit && npx vitest run src/audio-http.test.ts`
 
-**M5-05 [Sol] 点击时间戳原声点读（Click-to-Play）**
+- [x] **M5-05 [Sol] 点击时间戳原声点读（Click-to-Play）**
 - 范围：`app/src/hooks/useAudioPreview.ts`、`app/src/components/Segment.tsx`、`app/src/App.tsx`
 - 目标：点击任意段落左侧 `HH:MM:SS` 时间戳，计算该段相对本轮首段的秒数偏移，通过 `<audio>` 加载 `http://127.0.0.1:47800/audio/latest.wav` 跳转到对应秒数播放原声（播放该段期间时间戳高亮 `--accent` 并显示播放态，再次点击或播完该段时长自动暂停）。
 - 验收：`cd app && npx tsc --noEmit && npx vitest run && npm run build`
