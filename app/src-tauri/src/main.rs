@@ -15,13 +15,13 @@ use tauri::{Manager, RunEvent};
 struct Scheduler(Mutex<Option<Child>>);
 
 impl Scheduler {
-    fn start(&self, resource_dir: Option<&Path>) -> io::Result<()> {
+    fn start(&self, resource_dir: Option<&Path>, app_data_dir: Option<&Path>) -> io::Result<()> {
         let address = ([127, 0, 0, 1], 47800).into();
         if TcpStream::connect_timeout(&address, Duration::from_millis(150)).is_ok() {
             return Ok(());
         }
 
-        let directory = scheduler_directory();
+        let directory = scheduler_directory(resource_dir);
         let mut command = if let Some(binary) = env::var_os("SCHEDULER_BIN") {
             let path = Path::new(&binary);
             let program = if path.is_relative() && path.components().count() > 1 {
@@ -31,13 +31,13 @@ impl Scheduler {
             };
             Command::new(program)
         } else {
-            let Some(directory) = &directory else {
+            let Some((directory, _)) = &directory else {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
                     "scheduler directory was not found; set SCHEDULER_BIN",
                 ));
             };
-            let node = find_node()
+            let node = find_node(resource_dir)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Node was not found"))?;
             let mut command = Command::new(node);
             if directory.join("dist/main.js").is_file() {
@@ -48,22 +48,36 @@ impl Scheduler {
             command.args(["--engine", "r2t2"]);
             command
         };
-        if let Some(directory) = directory {
+        if let Some((directory, bundled)) = directory {
             command.current_dir(directory);
+            if bundled && env::var_os("DATA_DIR").is_none() {
+                let data = app_data_dir
+                    .ok_or_else(|| io::Error::other("Application data directory was not found"))?
+                    .join("data");
+                fs::create_dir_all(&data)?;
+                command.env("DATA_DIR", data);
+            }
         }
         if let Some(resource_dir) = resource_dir {
-            for (variable, filename) in [
-                ("CAPTURE_PATH", "capture-mac"),
-                ("ASR_SERVER_PATH", "audiocpp_server"),
+            for (variable, relative_path) in [
+                ("CAPTURE_PATH", "bin/capture-mac"),
+                ("ASR_SERVER_PATH", "bin/audiocpp_server"),
+                ("VAD_MODEL_PATH", "models/silero_vad.onnx"),
             ] {
-                let path = resource_dir.join("bin").join(filename);
+                let path = resource_dir.join(relative_path);
                 if env::var_os(variable).is_none() && path.is_file() {
                     command.env(variable, path);
                 }
             }
         }
+        if env::var_os("ASR_MODEL_PATH").is_none() {
+            if let Some(model) = find_asr_model(app_data_dir) {
+                command.env("ASR_MODEL_PATH", model);
+            }
+        }
 
         let child = command
+            .env("ORT_DISABLE_TELEMETRY", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -87,11 +101,20 @@ impl Drop for Scheduler {
     }
 }
 
-fn scheduler_directory() -> Option<PathBuf> {
+fn launch_paths() -> impl Iterator<Item = PathBuf> {
     env::current_exe()
         .ok()
         .into_iter()
         .chain(env::current_dir().ok())
+}
+
+fn scheduler_directory(resource_dir: Option<&Path>) -> Option<(PathBuf, bool)> {
+    if let Some(directory) = resource_dir.map(|path| path.join("scheduler")) {
+        if directory.join("dist/main.js").is_file() {
+            return Some((directory, true));
+        }
+    }
+    launch_paths()
         .chain([PathBuf::from(env!("CARGO_MANIFEST_DIR"))])
         .find_map(|path| {
             path.ancestors()
@@ -101,11 +124,41 @@ fn scheduler_directory() -> Option<PathBuf> {
                         || directory.join("src/main.ts").is_file()
                 })
         })
+        .map(|directory| (directory, false))
 }
 
-fn find_node() -> Option<PathBuf> {
-    env::split_paths(&env::var_os("PATH").unwrap_or_default())
-        .map(|directory| directory.join("node"))
+fn find_asr_model(app_data_dir: Option<&Path>) -> Option<PathBuf> {
+    const MODEL: &str = "r2t2-q8_0.gguf";
+    const MODEL_SUBDIR: &str = "Confucius4-R2T2-GGUF";
+
+    app_data_dir
+        .into_iter()
+        .flat_map(|path| {
+            let models = path.join("models");
+            [models.join(MODEL), models.join(MODEL_SUBDIR).join(MODEL)]
+        })
+        .chain(env::var_os("HOME").map(|home| {
+            PathBuf::from(home)
+                .join("Models")
+                .join(MODEL_SUBDIR)
+                .join(MODEL)
+        }))
+        .chain(launch_paths().filter_map(|path| {
+            path.ancestors()
+                .map(|ancestor| ancestor.join("models").join(MODEL_SUBDIR).join(MODEL))
+                .find(|model| model.is_file())
+        }))
+        .find(|model| model.is_file())
+}
+
+fn find_node(resource_dir: Option<&Path>) -> Option<PathBuf> {
+    resource_dir
+        .map(|directory| directory.join("bin/node"))
+        .into_iter()
+        .chain(
+            env::split_paths(&env::var_os("PATH").unwrap_or_default())
+                .map(|directory| directory.join("node")),
+        )
         .chain([
             PathBuf::from("/opt/homebrew/bin/node"),
             PathBuf::from("/usr/local/bin/node"),
@@ -189,7 +242,10 @@ fn write_export_file(
         "转写.txt" => "txt",
         _ => return Err("Invalid export filename".into()),
     };
-    let directory = app.path().download_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .download_dir()
+        .map_err(|error| error.to_string())?;
     for index in 0..1000 {
         let filename = if index == 0 {
             default_name.clone()
@@ -198,7 +254,11 @@ fn write_export_file(
         };
         let path = directory.join(filename);
         let export_path = path.to_str().ok_or("Invalid export path")?.to_owned();
-        let mut file = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error.to_string()),
@@ -248,7 +308,11 @@ fn toggle_overlay_window(
         &app,
         "overlay",
         tauri::WebviewUrl::App(
-            format!("index.html?view=overlay&locked={}", if locked { "1" } else { "0" }).into(),
+            format!(
+                "index.html?view=overlay&locked={}",
+                if locked { "1" } else { "0" }
+            )
+            .into(),
         ),
     )
     .inner_size(WIDTH, HEIGHT)
@@ -317,7 +381,9 @@ fn main() {
         })
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
-            app.state::<Scheduler>().start(resource_dir.as_deref())?;
+            let app_data_dir = app.path().app_data_dir().ok();
+            app.state::<Scheduler>()
+                .start(resource_dir.as_deref(), app_data_dir.as_deref())?;
             Ok(())
         })
         .build(tauri::generate_context!())
