@@ -11,7 +11,7 @@ import { MockAsrAdapter } from "./asr/mock-adapter.js";
 import { R2T2Adapter } from "./asr/r2t2-adapter.js";
 import { CaptureReader } from "./capture-reader.js";
 import {
-  ASR_MODEL_PATH, BYTES_PER_SAMPLE, CAPTURE_PATH, CHANNELS, DATA_DIR, FRAME_BYTES, FRAME_MS,
+  ASR_CHUNK_MS, ASR_MODEL_PATH, BYTES_PER_SAMPLE, CAPTURE_PATH, CHANNELS, DATA_DIR, FRAME_BYTES, FRAME_MS,
   SAMPLE_RATE, SHORT_FRAME_BYTES, SHORT_FRAME_MS, WS_PORT,
 } from "./config.js";
 import { exportSession } from "./export.js";
@@ -152,6 +152,21 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+async function startAdapter(adapter: AsrAdapter): Promise<void> {
+  // The scheduler owns signal shutdown so a managed engine stays alive through the final flush.
+  const signals = ["SIGINT", "SIGTERM"] as const;
+  const previous = signals.map((name) => new Set(process.listeners(name)));
+  try {
+    return adapter.start();
+  } finally {
+    for (const [index, name] of signals.entries()) {
+      for (const listener of process.listeners(name)) {
+        if (!previous[index]?.has(listener)) process.off(name, listener);
+      }
+    }
+  }
+}
+
 interface AudioSegment {
   segmentId: number;
   startedAtMs: number;
@@ -246,7 +261,6 @@ class Recording {
         this.pcm?.close(),
         this.log.close(),
         this.vad?.dispose(),
-        this.adapter.stop(),
       ]);
       for (const result of cleanup) {
         if (result.status === "rejected") this.fail(result.reason);
@@ -306,27 +320,15 @@ class Recording {
 
   private async startEngine(): Promise<void> {
     const { signal } = this.controller;
-    // The scheduler owns signal shutdown so a managed engine stays alive through the final flush.
-    const signals = ["SIGINT", "SIGTERM"] as const;
-    const previous = signals.map((name) => new Set(process.listeners(name)));
-    let starting: Promise<void>;
+    let cancelStartup: (() => void) | undefined;
+    const canceled = new Promise<void>((resolve) => {
+      cancelStartup = () => resolve();
+      signal.addEventListener("abort", cancelStartup, { once: true });
+    });
     try {
-      starting = this.adapter.start();
+      await Promise.race([startAdapter(this.adapter), canceled]);
     } finally {
-      for (const [index, name] of signals.entries()) {
-        for (const listener of process.listeners(name)) {
-          if (!previous[index]?.has(listener)) process.off(name, listener);
-        }
-      }
-    }
-    const cancelStartup = (): void => {
-      void this.adapter.stop().catch((error: unknown) => this.fail(error));
-    };
-    signal.addEventListener("abort", cancelStartup, { once: true });
-    try {
-      await starting;
-    } finally {
-      signal.removeEventListener("abort", cancelStartup);
+      if (cancelStartup) signal.removeEventListener("abort", cancelStartup);
     }
   }
 
@@ -658,8 +660,15 @@ class Scheduler {
     await this.ws.start();
     if (this.shutdownSignal.signal.aborted) return;
     console.error(`[scheduler] listening on port ${this.options.port}`);
+    if (!this.options.exitOnEof) {
+      void startAdapter(this.adapter).catch((error: unknown) => {
+        if (!this.shutdownSignal.signal.aborted) {
+          console.error(`[scheduler] engine warmup failed: ${errorText(error)}`);
+        }
+      });
+    }
     if (this.options.file) {
-      const task = this.startRecording({ kind: "file", path: this.options.file, fast: this.options.fast }, FRAME_MS);
+      const task = this.startRecording({ kind: "file", path: this.options.file, fast: this.options.fast }, ASR_CHUNK_MS);
       if (this.options.exitOnEof) {
         await task;
         await this.shutdown();
@@ -678,6 +687,7 @@ class Scheduler {
       await this.devicesTask?.catch(() => {});
       await this.ws.close();
     } finally {
+      await this.adapter.stop().catch(() => {});
       process.off("SIGINT", this.onSignal);
       process.off("SIGTERM", this.onSignal);
     }
@@ -715,7 +725,7 @@ class Scheduler {
         }
         void this.startRecording({
           kind: "capture", source: message.source, deviceId: message.deviceId,
-        }, message.frameMs ?? FRAME_MS);
+        }, message.frameMs ?? ASR_CHUNK_MS);
         break;
       case "session.stop":
         await this.stopRecording();

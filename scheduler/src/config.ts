@@ -37,15 +37,15 @@ export const NEAR_CUT_SILENCE_MS = 200;
 export const FORCE_CUT_AT_MS = 90_000;
 export const WATCHDOG_MS = 100_000;
 export const ENGINE_HARD_LIMIT_MS = 110_000;
-export const IDLE_CLOSE_MS = 1500;
+export const IDLE_CLOSE_MS = 640;
 export const VAD_SPEECH_THRESHOLD = 0.5;
 export const VAD_SILENCE_THRESHOLD = 0.35;
 export const VAD_SPEECH_ONSET_WINDOWS = 2;
 export const MAX_PROMPT_CHARS = 250;
 
 export const ASR_CHUNK_MS = SHORT_FRAME_MS;
-export const ASR_UNFIXED_CHUNK_NUM = 2;
-export const ASR_UNFIXED_TOKEN_NUM = 2;
+export const ASR_UNFIXED_CHUNK_NUM = 1;
+export const ASR_UNFIXED_TOKEN_NUM = 1;
 
 export const WS_HOST = "127.0.0.1";
 export const WS_PORT = 47800;

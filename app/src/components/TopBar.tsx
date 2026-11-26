@@ -64,7 +64,7 @@ export function TopBar({
     if (recording) {
       sessionStore.stopSession();
     } else {
-      sessionStore.startSession(source.source, source.deviceId);
+      sessionStore.startSession(source.source, source.deviceId, 160);
     }
   }, [actionDisabled, recording, source]);
 
